@@ -62,7 +62,8 @@ set(RFB_SOURCES
   ZRLEEncoder.cxx
   ZRLEDecoder.cxx
   encodings.cxx
-  util.cxx)
+  util.cxx
+  PARENT_SCOPE)
 
 if(UNIX)
   set(RFB_SOURCES ${RFB_SOURCES} Logger_syslog.cxx)

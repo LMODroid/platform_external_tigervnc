@@ -149,7 +149,7 @@ namespace rfb {
       server = 0;
     }
     virtual void queryConnection(network::Socket* sock,
-                                 const char* userName) {
+                                 __unused_attr const char* userName) {
       server->approveConnection(sock, true, NULL);
     }
 

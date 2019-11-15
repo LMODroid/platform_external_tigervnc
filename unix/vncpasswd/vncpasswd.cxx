@@ -91,6 +91,28 @@ static int encrypt_pipe() {
   return 0;
 }
 
+static int encrypt_pipe_for_password(char* plain, char* fname) {
+
+  if (!plain)
+    return 1;
+  PlainPasswd buf(256);
+  strcpy(buf.buf, plain);
+  ObfuscatedPasswd obfuscated(buf.takeBuf());
+    
+  FILE* fp = fopen(fname,"w");
+  if (!fp) {
+      fprintf(stderr,"Couldn't open %s for writing\n",fname);
+      return 1;
+  }
+  chmod(fname, S_IRUSR|S_IWUSR);
+
+  if (fwrite(obfuscated.buf, obfuscated.length, 1, fp) != 1) {
+      fprintf(stderr,"Writing to %s failed\n",fname);
+      return 1;
+  }
+  return 0;
+}
+
 static ObfuscatedPasswd* readpassword() {
   while (true) {
     PlainPasswd passwd(getpassword("Password:"));
@@ -126,11 +148,17 @@ int main(int argc, char** argv)
   prog = argv[0];
 
   char* fname = 0;
-
+  fprintf(stderr, "argc = %d", argc);
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-q") == 0) { // allowed for backwards compatibility
     } else if (strncmp(argv[i], "-f", 2) == 0) {
       return encrypt_pipe();
+    } else if (strncmp(argv[i], "-g", 2) == 0) {
+      if (argc == 4) {
+        return encrypt_pipe_for_password(argv[i + 1], strDup(argv[i + 2]));
+      } else {
+          usage();
+      }
     } else if (argv[i][0] == '-') {
       usage();
     } else if (!fname) {

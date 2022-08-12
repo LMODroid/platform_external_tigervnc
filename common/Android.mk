@@ -23,6 +23,7 @@ LOCAL_SRC_FILES :=  \
     rdr/ZlibOutStream.cxx \
     network/Socket.cxx \
     network/TcpSocket.cxx \
+    network/UnixSocket.cxx \
     Xregion/Region.c
 
 LOCAL_SRC_FILES +=  \
@@ -92,10 +93,13 @@ LOCAL_SRC_FILES +=  \
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)
 
-LOCAL_CFLAGS := -Ofast -Wall -Wformat=2 -DNDEBUG -UNDEBUG -Werror
+#LOCAL_CFLAGS := -O0 -g
+LOCAL_CFLAGS := -Ofast
+#LOCAL_CFLAGS += -Rpass=loop-vectorize -Rpass-missed=loop-vectorize -Rpass-analysis=loop-vectorize
+LOCAL_CFLAGS += -Wall -Wformat=2 -DNDEBUG -UNDEBUG -Wno-ignored-qualifiers -Werror
 LOCAL_CFLAGS += -Wno-unused-parameter -Wno-implicit-fallthrough
 
-LOCAL_CPPFLAGS := -std=c++11 -fexceptions -frtti
+LOCAL_CPPFLAGS := -Ofast -std=c++11 -fexceptions -frtti
 
 LOCAL_SHARED_LIBRARIES := \
     libjpeg \

@@ -88,7 +88,7 @@ char* UnixSocket::getPeerAddress() {
     return rfb::strDup("");
   }
 
-  if (salen > offsetof(struct sockaddr_un, sun_path))
+  if ((unsigned int)salen > offsetof(struct sockaddr_un, sun_path))
     return rfb::strDup(addr.sun_path);
 
   salen = sizeof(addr);
@@ -97,7 +97,7 @@ char* UnixSocket::getPeerAddress() {
     return rfb::strDup("");
   }
 
-  if (salen > offsetof(struct sockaddr_un, sun_path))
+  if ((unsigned int)salen > offsetof(struct sockaddr_un, sun_path))
     return rfb::strDup(addr.sun_path);
 
   // socketpair() will create unnamed sockets

@@ -1,5 +1,4 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
- * Copyright 2016-2020 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,119 +16,152 @@
  * USA.
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+// Cross-platform Region class based on the X11 region implementation.  Note
+// that for efficiency this code manipulates the Xlib region structure
+// directly.  Apart from the layout of the structure, there is one other key
+// assumption made: a Region returned from XCreateRegion must always have its
+// rects member allocated so that there is space for at least one rectangle.
+//
 
 #include <rfb/Region.h>
 #include <rfb/LogWriter.h>
+#include <assert.h>
+#include <stdio.h>
 
 extern "C" {
-#include <pixman.h>
+#include <Xregion/Xlibint.h>
+#include <Xregion/Xutil.h>
+#include <Xregion/Xregion.h>
 }
 
 static rfb::LogWriter vlog("Region");
 
+// A _RectRegion must never be passed as a return parameter to the Xlib region
+// operations.  This is because for efficiency its "rects" member has not been
+// allocated with Xmalloc.  It is however safe to pass it as an input
+// parameter.
+
+class _RectRegion {
+public:
+  _RectRegion(const rfb::Rect& r) {
+    region.rects = &region.extents;
+    region.numRects = 1;
+    region.extents.x1 = r.tl.x;
+    region.extents.y1 = r.tl.y;
+    region.extents.x2 = r.br.x;
+    region.extents.y2 = r.br.y;
+    region.size = 1;
+    if (r.is_empty())
+      region.numRects = 0;
+  }
+  REGION region;
+};
+
+
 rfb::Region::Region() {
-  rgn = new struct pixman_region16;
-  pixman_region_init(rgn);
+  xrgn = XCreateRegion();
+  assert(xrgn);
 }
 
 rfb::Region::Region(const Rect& r) {
-  rgn = new struct pixman_region16;
-  pixman_region_init_rect(rgn, r.tl.x, r.tl.y, r.width(), r.height());
+  xrgn = XCreateRegion();
+  assert(xrgn);
+  reset(r);
 }
 
 rfb::Region::Region(const rfb::Region& r) {
-  rgn = new struct pixman_region16;
-  pixman_region_init(rgn);
-  pixman_region_copy(rgn, r.rgn);
+  xrgn = XCreateRegion();
+  assert(xrgn);
+  XUnionRegion(xrgn, r.xrgn, xrgn);
 }
 
 rfb::Region::~Region() {
-  pixman_region_fini(rgn);
-  delete rgn;
+  XDestroyRegion(xrgn);
 }
 
 rfb::Region& rfb::Region::operator=(const rfb::Region& r) {
-  pixman_region_copy(rgn, r.rgn);
+  clear();
+  XUnionRegion(xrgn, r.xrgn, xrgn);
   return *this;
 }
 
 void rfb::Region::clear() {
-  // pixman_region_clear() isn't available on some older systems
-  pixman_region_fini(rgn);
-  pixman_region_init(rgn);
+  xrgn->numRects = 0;
+  xrgn->extents.x1 = 0;
+  xrgn->extents.y1 = 0;
+  xrgn->extents.x2 = 0;
+  xrgn->extents.y2 = 0;
 }
 
 void rfb::Region::reset(const Rect& r) {
-  pixman_region_fini(rgn);
-  pixman_region_init_rect(rgn, r.tl.x, r.tl.y, r.width(), r.height());
+  if (r.is_empty()) {
+    clear();
+  } else {
+    xrgn->numRects = 1;
+    xrgn->rects[0].x1 = xrgn->extents.x1 = r.tl.x;
+    xrgn->rects[0].y1 = xrgn->extents.y1 = r.tl.y;
+    xrgn->rects[0].x2 = xrgn->extents.x2 = r.br.x;
+    xrgn->rects[0].y2 = xrgn->extents.y2 = r.br.y;
+  }
 }
 
 void rfb::Region::translate(const Point& delta) {
-  pixman_region_translate(rgn, delta.x, delta.y);
+  XOffsetRegion(xrgn, delta.x, delta.y);
 }
 
 void rfb::Region::assign_intersect(const rfb::Region& r) {
-  pixman_region_intersect(rgn, rgn, r.rgn);
+  XIntersectRegion(xrgn, r.xrgn, xrgn);
 }
 
 void rfb::Region::assign_union(const rfb::Region& r) {
-  pixman_region_union(rgn, rgn, r.rgn);
+  XUnionRegion(xrgn, r.xrgn, xrgn);
 }
 
 void rfb::Region::assign_subtract(const rfb::Region& r) {
-  pixman_region_subtract(rgn, rgn, r.rgn);
+  XSubtractRegion(xrgn, r.xrgn, xrgn);
 }
 
 rfb::Region rfb::Region::intersect(const rfb::Region& r) const {
   rfb::Region ret;
-  pixman_region_intersect(ret.rgn, rgn, r.rgn);
+  XIntersectRegion(xrgn, r.xrgn, ret.xrgn);
   return ret;
 }
 
 rfb::Region rfb::Region::union_(const rfb::Region& r) const {
   rfb::Region ret;
-  pixman_region_union(ret.rgn, rgn, r.rgn);
+  XUnionRegion(xrgn, r.xrgn, ret.xrgn);
   return ret;
 }
 
 rfb::Region rfb::Region::subtract(const rfb::Region& r) const {
   rfb::Region ret;
-  pixman_region_subtract(ret.rgn, rgn, r.rgn);
+  XSubtractRegion(xrgn, r.xrgn, ret.xrgn);
   return ret;
 }
 
 bool rfb::Region::equals(const rfb::Region& r) const {
-  return pixman_region_equal(rgn, r.rgn);
+  return XEqualRegion(xrgn, r.xrgn);
 }
 
 int rfb::Region::numRects() const {
-  return pixman_region_n_rects(rgn);
+  return xrgn->numRects;
 }
 
 bool rfb::Region::get_rects(std::vector<Rect>* rects,
                             bool left2right, bool topdown) const
 {
-  int nRects;
-  const pixman_box16_t* boxes;
-  int xInc, yInc, i;
-
-  boxes = pixman_region_rectangles(rgn, &nRects);
-
+  int nRects = xrgn->numRects;
+  int xInc = left2right ? 1 : -1;
+  int yInc = topdown ? 1 : -1;
+  int i = topdown ? 0 : nRects-1;
   rects->clear();
   rects->reserve(nRects);
-
-  xInc = left2right ? 1 : -1;
-  yInc = topdown ? 1 : -1;
-  i = topdown ? 0 : nRects-1;
 
   while (nRects > 0) {
     int firstInNextBand = i;
     int nRectsInBand = 0;
 
-    while (nRects > 0 && boxes[firstInNextBand].y1 == boxes[i].y1)
+    while (nRects > 0 && xrgn->rects[firstInNextBand].y1 == xrgn->rects[i].y1)
     {
       firstInNextBand += yInc;
       nRects--;
@@ -140,7 +172,8 @@ bool rfb::Region::get_rects(std::vector<Rect>* rects,
       i = firstInNextBand - yInc;
 
     while (nRectsInBand > 0) {
-      Rect r(boxes[i].x1, boxes[i].y1, boxes[i].x2, boxes[i].y2);
+      Rect r(xrgn->rects[i].x1, xrgn->rects[i].y1,
+             xrgn->rects[i].x2, xrgn->rects[i].y2);
       rects->push_back(r);
       i += xInc;
       nRectsInBand--;
@@ -153,27 +186,22 @@ bool rfb::Region::get_rects(std::vector<Rect>* rects,
 }
 
 rfb::Rect rfb::Region::get_bounding_rect() const {
-  const pixman_box16_t* extents;
-  extents = pixman_region_extents(rgn);
-  return Rect(extents->x1, extents->y1, extents->x2, extents->y2);
+  return Rect(xrgn->extents.x1, xrgn->extents.y1,
+              xrgn->extents.x2, xrgn->extents.y2);
 }
 
 
 void rfb::Region::debug_print(const char* prefix) const
 {
-  Rect extents;
-  std::vector<Rect> rects;
-  std::vector<Rect>::const_iterator iter;
-
-  extents = get_bounding_rect();
-  get_rects(&rects);
-
   vlog.debug("%s num rects %3ld extents %3d,%3d %3dx%3d",
-          prefix, (long)rects.size(), extents.tl.x, extents.tl.y,
-          extents.width(), extents.height());
+          prefix, xrgn->numRects, xrgn->extents.x1, xrgn->extents.y1,
+          xrgn->extents.x2-xrgn->extents.x1,
+          xrgn->extents.y2-xrgn->extents.y1);
 
-  for (iter = rects.begin(); iter != rects.end(); ++iter) {
+  for (int i = 0; i < xrgn->numRects; i++) {
     vlog.debug("    rect %3d,%3d %3dx%3d",
-               iter->tl.x, iter->tl.y, iter->width(), iter->height());
+            xrgn->rects[i].x1, xrgn->rects[i].y1,
+            xrgn->rects[i].x2-xrgn->rects[i].x1,
+            xrgn->rects[i].y2-xrgn->rects[i].y1);
   }
 }

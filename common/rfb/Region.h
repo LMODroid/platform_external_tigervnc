@@ -1,5 +1,4 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
- * Copyright 2016-2020 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +16,7 @@
  * USA.
  */
 
-// Region class wrapper around pixman's region operations
+// Cross-platform Region class based on the X11 region implementation
 
 #ifndef __RFB_REGION_INCLUDED__
 #define __RFB_REGION_INCLUDED__
@@ -25,7 +24,7 @@
 #include <rfb/Rect.h>
 #include <vector>
 
-struct pixman_region16;
+struct _XRegion;
 
 namespace rfb {
 
@@ -69,7 +68,7 @@ namespace rfb {
 
   protected:
 
-    struct pixman_region16* rgn;
+    struct _XRegion* xrgn;
   };
 
 };

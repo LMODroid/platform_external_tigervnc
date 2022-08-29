@@ -128,9 +128,6 @@ endif()
 # Check for zlib
 find_package(ZLIB REQUIRED)
 
-# Check for pixman
-find_package(Pixman REQUIRED)
-
 # Check for gettext
 option(ENABLE_NLS "Enable translation of program messages" ON)
 if(ENABLE_NLS)

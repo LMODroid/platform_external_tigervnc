@@ -1,6 +1,7 @@
 add_subdirectory(os)
 add_subdirectory(rdr)
 add_subdirectory(network)
+add_subdirectory(Xregion)
 add_subdirectory(rfb)
 
 # For any convenience libraries that are linked into libvnc.so, we need to
@@ -9,7 +10,7 @@ add_subdirectory(rfb)
 # is passed (additionally, libvnc is not used on Windows.)
 
 if(NOT WIN32)
-  set_target_properties(os rdr network rfb
+  set_target_properties(os rdr network Xregion rfb
     PROPERTIES COMPILE_FLAGS -fPIC)
 endif()
 

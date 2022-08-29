@@ -25,7 +25,7 @@
 #include <rfb/SConnection.h>
 #include <rfb/Exception.h>
 #include <rdr/InStream.h>
-#if !defined(WIN32) && !defined(__APPLE__)
+#if !defined(WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
 #include <rfb/UnixPasswordValidator.h>
 #endif
 #ifdef WIN32
@@ -64,7 +64,7 @@ SSecurityPlain::SSecurityPlain(SConnection* sc) : SSecurity(sc)
 {
 #ifdef WIN32
   valid = new WinPasswdValidator();
-#elif !defined(__APPLE__)
+#elif !defined(__APPLE__) && !defined(__ANDROID__)
   valid = new UnixPasswordValidator();
 #else
   valid = NULL;

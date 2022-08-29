@@ -127,7 +127,7 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       if (*in != '\r') {
         sz++;
         in++;
@@ -135,7 +135,7 @@ namespace rfb {
         continue;
       }
 
-      if ((in_len == 0) || (*(in+1) != '\n'))
+      if ((in_len < 2) || (*(in+1) != '\n'))
         sz++;
 
       in++;
@@ -150,14 +150,14 @@ namespace rfb {
     out = buffer;
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       if (*in != '\r') {
         *out++ = *in++;
         in_len--;
         continue;
       }
 
-      if ((in_len == 0) || (*(in+1) != '\n'))
+      if ((in_len < 2) || (*(in+1) != '\n'))
         *out++ = '\n';
 
       in++;
@@ -182,11 +182,11 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       sz++;
 
       if (*in == '\r') {
-        if ((in_len == 0) || (*(in+1) != '\n'))
+        if ((in_len < 2) || (*(in+1) != '\n'))
           sz++;
       } else if (*in == '\n') {
         if ((in == src) || (*(in-1) != '\r'))
@@ -205,7 +205,7 @@ namespace rfb {
     out = buffer;
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       if (*in == '\n') {
         if ((in == src) || (*(in-1) != '\r'))
           *out++ = '\r';
@@ -214,7 +214,7 @@ namespace rfb {
       *out = *in;
 
       if (*in == '\r') {
-        if ((in_len == 0) || (*(in+1) != '\n')) {
+        if ((in_len < 2) || (*(in+1) != '\n')) {
           out++;
           *out = '\n';
         }
@@ -291,6 +291,8 @@ namespace rfb {
     max--;
 
     while (count--) {
+      consumed++;
+
       // Invalid or truncated sequence?
       if ((max == 0) || ((*src & 0xc0) != 0x80)) {
         *dst = 0xfffd;
@@ -312,9 +314,10 @@ namespace rfb {
       *dst++ = src;
       *dst++ = L'\0';
       return 1;
-    } else if (src < 0x110000) {
-      *dst++ = 0xd800 | ((src >> 10) & 0x07ff);
-      *dst++ = 0xdc00 | (src & 0x07ff);
+    } else if ((src >= 0x10000) && (src < 0x110000)) {
+      src -= 0x10000;
+      *dst++ = 0xd800 | ((src >> 10) & 0x03ff);
+      *dst++ = 0xdc00 | (src & 0x03ff);
       *dst++ = L'\0';
       return 2;
     } else {
@@ -356,7 +359,7 @@ namespace rfb {
       return 1;
     }
 
-    *dst = 0x10000 | ((*dst & 0x03ff) << 10);
+    *dst = 0x10000 + ((*dst & 0x03ff) << 10);
     *dst |= *src & 0x3ff;
 
     return 2;
@@ -376,9 +379,9 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       char buf[5];
-      sz += ucs4ToUTF8(*in, buf);
+      sz += ucs4ToUTF8(*(const unsigned char*)in, buf);
       in++;
       in_len--;
     }
@@ -391,8 +394,8 @@ namespace rfb {
     out = buffer;
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
-      out += ucs4ToUTF8(*in, out);
+    while ((in_len > 0) && (*in != '\0')) {
+      out += ucs4ToUTF8(*(const unsigned char*)in, out);
       in++;
       in_len--;
     }
@@ -414,7 +417,7 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
 
@@ -432,7 +435,7 @@ namespace rfb {
     out = buffer;
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
 
@@ -464,7 +467,7 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = units;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
       char buf[5];
@@ -484,7 +487,7 @@ namespace rfb {
     out = buffer;
     in = src;
     in_len = units;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
 
@@ -513,7 +516,7 @@ namespace rfb {
     // Compute output size
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
       wchar_t buf[3];
@@ -527,13 +530,13 @@ namespace rfb {
 
     // Alloc
     buffer = new wchar_t[sz];
-    memset(buffer, 0, sz);
+    memset(buffer, 0, sz * sizeof(wchar_t));
 
     // And convert
     out = buffer;
     in = src;
     in_len = bytes;
-    while ((*in != '\0') && (in_len > 0)) {
+    while ((in_len > 0) && (*in != '\0')) {
       size_t len;
       unsigned ucs;
 

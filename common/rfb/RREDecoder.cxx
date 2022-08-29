@@ -16,6 +16,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rdr/InStream.h>
 #include <rdr/MemInStream.h>
 #include <rdr/OutStream.h>
@@ -44,15 +48,30 @@ RREDecoder::~RREDecoder()
 {
 }
 
-void RREDecoder::readRect(const Rect& r, rdr::InStream* is,
+bool RREDecoder::readRect(const Rect& r, rdr::InStream* is,
                           const ServerParams& server, rdr::OutStream* os)
 {
   rdr::U32 numRects;
+  size_t len;
+
+  if (!is->hasData(4))
+    return false;
+
+  is->setRestorePoint();
 
   numRects = is->readU32();
   os->writeU32(numRects);
 
-  os->copyBytes(is, server.pf().bpp/8 + numRects * (server.pf().bpp/8 + 8));
+  len = server.pf().bpp/8 + numRects * (server.pf().bpp/8 + 8);
+
+  if (!is->hasDataOrRestore(len))
+    return false;
+
+  is->clearRestorePoint();
+
+  os->copyBytes(is, len);
+
+  return true;
 }
 
 void RREDecoder::decodeRect(const Rect& r, const void* buffer,

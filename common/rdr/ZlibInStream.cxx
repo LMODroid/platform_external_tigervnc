@@ -16,6 +16,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 
 #include <rdr/ZlibInStream.h>
@@ -24,44 +28,33 @@
 
 using namespace rdr;
 
-enum { DEFAULT_BUF_SIZE = 16384 };
-
-ZlibInStream::ZlibInStream(int bufSize_)
-  : underlying(0), bufSize(bufSize_ ? bufSize_ : DEFAULT_BUF_SIZE), offset(0),
-    zs(NULL), bytesIn(0)
+ZlibInStream::ZlibInStream()
+  : underlying(0), zs(NULL), bytesIn(0)
 {
-  ptr = end = start = new U8[bufSize];
   init();
 }
 
 ZlibInStream::~ZlibInStream()
 {
   deinit();
-  delete [] start;
 }
 
-void ZlibInStream::setUnderlying(InStream* is, int bytesIn_)
+void ZlibInStream::setUnderlying(InStream* is, size_t bytesIn_)
 {
   underlying = is;
   bytesIn = bytesIn_;
-  ptr = end = start;
+  skip(avail());
 }
 
-int ZlibInStream::pos()
+void ZlibInStream::flushUnderlying()
 {
-  return offset + ptr - start;
-}
-
-void ZlibInStream::removeUnderlying()
-{
-  ptr = end = start;
-  if (!underlying) return;
-
   while (bytesIn > 0) {
-    decompress(true);
-    end = start; // throw away any data
+    if (!hasData(1))
+      throw Exception("ZlibInStream: failed to flush remaining stream data");
+    skip(avail());
   }
-  underlying = 0;
+
+  setUnderlying(NULL, 0);
 }
 
 void ZlibInStream::reset()
@@ -90,60 +83,35 @@ void ZlibInStream::init()
 void ZlibInStream::deinit()
 {
   assert(zs != NULL);
-  removeUnderlying();
+  setUnderlying(NULL, 0);
   inflateEnd(zs);
   delete zs;
   zs = NULL;
 }
 
-int ZlibInStream::overrun(int itemSize, int nItems, bool wait)
+bool ZlibInStream::fillBuffer()
 {
-  if (itemSize > bufSize)
-    throw Exception("ZlibInStream overrun: max itemSize exceeded");
   if (!underlying)
     throw Exception("ZlibInStream overrun: no underlying stream");
 
-  if (end - ptr != 0)
-    memmove(start, ptr, end - ptr);
-
-  offset += ptr - start;
-  end -= ptr - start;
-  ptr = start;
-
-  while (end - ptr < itemSize) {
-    if (!decompress(wait))
-      return 0;
-  }
-
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
-
-  return nItems;
-}
-
-// decompress() calls the decompressor once.  Note that this won't necessarily
-// generate any output data - it may just consume some input data.  Returns
-// false if wait is false and we would block on the underlying stream.
-
-bool ZlibInStream::decompress(bool wait)
-{
   zs->next_out = (U8*)end;
-  zs->avail_out = start + bufSize - end;
+  zs->avail_out = availSpace();
 
-  int n = underlying->check(1, 1, wait);
-  if (n == 0) return false;
-  zs->next_in = (U8*)underlying->getptr();
-  zs->avail_in = underlying->getend() - underlying->getptr();
-  if ((int)zs->avail_in > bytesIn)
-    zs->avail_in = bytesIn;
+  if (!underlying->hasData(1))
+    return false;
+  size_t length = underlying->avail();
+  if (length > bytesIn)
+    length = bytesIn;
+  zs->next_in = (U8*)underlying->getptr(length);
+  zs->avail_in = length;
 
   int rc = inflate(zs, Z_SYNC_FLUSH);
-  if (rc != Z_OK) {
+  if (rc < 0) {
     throw Exception("ZlibInStream: inflate failed");
   }
 
-  bytesIn -= zs->next_in - underlying->getptr();
+  bytesIn -= length - zs->avail_in;
   end = zs->next_out;
-  underlying->setptr(zs->next_in);
+  underlying->setptr(length - zs->avail_in);
   return true;
 }

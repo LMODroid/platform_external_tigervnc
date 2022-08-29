@@ -16,6 +16,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 #include <string.h>
 #include <rfb/Cursor.h>
@@ -272,8 +277,7 @@ void RenderedCursor::update(PixelBuffer* framebuffer,
   assert(cursor);
 
   format = framebuffer->getPF();
-  width_ = framebuffer->width();
-  height_ = framebuffer->height();
+  setSize(framebuffer->width(), framebuffer->height());
 
   rawOffset = pos.subtract(cursor->hotspot());
   clippedRect = Rect(0, 0, cursor->width(), cursor->height())

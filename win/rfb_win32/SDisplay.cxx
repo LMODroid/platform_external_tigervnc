@@ -21,6 +21,10 @@
 //
 // The SDisplay class encapsulates a particular system display.
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 
 #include <rfb_win32/SDisplay.h>
@@ -417,7 +421,7 @@ SDisplay::processEvent(HANDLE event) {
         // Update the cursor position
         // NB: First translate from Screen coordinates to Desktop
         Point desktopPos = info.position.translate(screenRect.tl.negate());
-        server->setCursorPos(desktopPos);
+        server->setCursorPos(desktopPos, false);
 
         old_cursor = info;
       }

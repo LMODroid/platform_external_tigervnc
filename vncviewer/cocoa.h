@@ -19,12 +19,20 @@
 #ifndef __VNCVIEWER_COCOA_H__
 #define __VNCVIEWER_COCOA_H__
 
-int cocoa_capture_display(Fl_Window *win, bool all_displays);
-void cocoa_release_display(Fl_Window *win);
+class Fl_Window;
+
+int cocoa_get_level(Fl_Window *win);
+void cocoa_set_level(Fl_Window *win, int level);
+
+int cocoa_capture_displays(Fl_Window *win);
+void cocoa_release_displays(Fl_Window *win);
 
 typedef struct CGColorSpace *CGColorSpaceRef;
 
 CGColorSpaceRef cocoa_win_color_space(Fl_Window *win);
+
+bool cocoa_win_is_zoomed(Fl_Window *win);
+void cocoa_win_zoom(Fl_Window *win);
 
 int cocoa_is_keyboard_event(const void *event);
 

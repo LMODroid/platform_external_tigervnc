@@ -18,6 +18,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 #include <signal.h>
 #include <unistd.h>
@@ -217,7 +221,7 @@ void XDesktop::poll() {
                   &x, &y, &wx, &wy, &mask);
     x -= geometry->offsetLeft();
     y -= geometry->offsetTop();
-    server->setCursorPos(rfb::Point(x, y));
+    server->setCursorPos(rfb::Point(x, y), false);
   }
 }
 
@@ -288,9 +292,19 @@ void XDesktop::queryConnection(network::Socket* sock,
 {
   assert(isRunning());
 
+  // Someone already querying?
   if (queryConnectSock) {
-    server->approveConnection(sock, false, "Another connection is currently being queried.");
-    return;
+    std::list<network::Socket*> sockets;
+    std::list<network::Socket*>::iterator i;
+
+    // Check if this socket is still valid
+    server->getSockets(&sockets);
+    for (i = sockets.begin(); i != sockets.end(); i++) {
+      if (*i == queryConnectSock) {
+        server->approveConnection(sock, false, "Another connection is currently being queried.");
+        return;
+      }
+    }
   }
 
   if (!userName)
@@ -412,6 +426,7 @@ void XDesktop::clientCutText(const char* str) {
 ScreenSet XDesktop::computeScreenLayout()
 {
   ScreenSet layout;
+  char buffer[2048];
 
 #ifdef HAVE_XRANDR
   XRRScreenResources *res = XRRGetScreenResources(dpy, DefaultRootWindow(dpy));
@@ -429,13 +444,11 @@ ScreenSet XDesktop::computeScreenLayout()
   Point offset(-geometry->offsetLeft(), -geometry->offsetTop());
   for (iter = layout.begin();iter != layout.end();iter = iter_next) {
     iter_next = iter; ++iter_next;
-    iter->dimensions = iter->dimensions.translate(offset);
-    if (iter->dimensions.enclosed_by(geometry->getRect()))
-        continue;
     iter->dimensions = iter->dimensions.intersect(geometry->getRect());
-    if (iter->dimensions.is_empty()) {
+    if (iter->dimensions.is_empty())
       layout.remove_screen(iter->id);
-    }
+    else
+      iter->dimensions = iter->dimensions.translate(offset);
   }
 #endif
 
@@ -443,6 +456,10 @@ ScreenSet XDesktop::computeScreenLayout()
   if (layout.num_screens() == 0)
     layout.add_screen(rfb::Screen(0, 0, 0, geometry->width(),
                                   geometry->height(), 0));
+
+  vlog.debug("Detected screen layout:");
+  layout.print(buffer, sizeof(buffer));
+  vlog.debug("%s", buffer);
 
   return layout;
 }
@@ -486,12 +503,6 @@ unsigned int XDesktop::setScreenLayout(int fb_width, int fb_height,
                                        const rfb::ScreenSet& layout)
 {
 #ifdef HAVE_XRANDR
-  char buffer[2048];
-  vlog.debug("Got request for framebuffer resize to %dx%d",
-             fb_width, fb_height);
-  layout.print(buffer, sizeof(buffer));
-  vlog.debug("%s", buffer);
-
   XRRScreenResources *res = XRRGetScreenResources(dpy, DefaultRootWindow(dpy));
   if (!res) {
     vlog.error("XRRGetScreenResources failed");

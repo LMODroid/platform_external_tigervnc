@@ -22,6 +22,10 @@
 // CSecurityVeNCrypt
 //
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/Exception.h>
 #include <rdr/InStream.h>
 #include <rdr/OutStream.h>
@@ -51,29 +55,32 @@ CSecurityVeNCrypt::CSecurityVeNCrypt(CConnection* cc, SecurityClient* sec)
   chosenType = secTypeVeNCrypt;
   nAvailableTypes = 0;
   availableTypes = NULL;
-  iAvailableType = 0;
 }
 
 CSecurityVeNCrypt::~CSecurityVeNCrypt()
 {
-  if (availableTypes)
-	delete[] availableTypes;
+  delete[] availableTypes;
+  delete csecurity;
 }
 
 bool CSecurityVeNCrypt::processMsg()
 {
   InStream* is = cc->getInStream();
   OutStream* os = cc->getOutStream();
-	
+
   /* get major, minor versions, send what we can support (or 0.0 for can't support it) */
   if (!haveRecvdMajorVersion) {
+    if (!is->hasData(1))
+      return false;
+
     majorVersion = is->readU8();
     haveRecvdMajorVersion = true;
-
-    return false;
   }
 
   if (!haveRecvdMinorVersion) {
+    if (!is->hasData(1))
+      return false;
+
     minorVersion = is->readU8();
     haveRecvdMinorVersion = true;
   }
@@ -100,47 +107,48 @@ bool CSecurityVeNCrypt::processMsg()
      }
 
      haveSentVersion = true;
-     return false;
   }
 
   /* Check that the server is OK */
   if (!haveAgreedVersion) {
+    if (!is->hasData(1))
+      return false;
+
     if (is->readU8())
       throw AuthFailureException("The server reported it could not support the "
 				 "VeNCrypt version");
 
     haveAgreedVersion = true;
-    return false;
   }
   
   /* get a number of types */
   if (!haveNumberOfTypes) {
+    if (!is->hasData(1))
+      return false;
+
     nAvailableTypes = is->readU8();
-    iAvailableType = 0;
 
     if (!nAvailableTypes)
       throw AuthFailureException("The server reported no VeNCrypt sub-types");
 
     availableTypes = new rdr::U32[nAvailableTypes];
     haveNumberOfTypes = true;
-    return false;
   }
 
   if (nAvailableTypes) {
     /* read in the types possible */
     if (!haveListOfTypes) {
-      if (is->checkNoWait(4)) {
-	availableTypes[iAvailableType++] = is->readU32();
-	haveListOfTypes = (iAvailableType >= nAvailableTypes);
-	vlog.debug("Server offers security type %s (%d)",
-		   secTypeName(availableTypes[iAvailableType - 1]),
-		   availableTypes[iAvailableType - 1]);
+      if (!is->hasData(4 * nAvailableTypes))
+        return false;
 
-	if (!haveListOfTypes)
-	  return false;
+      for (int i = 0;i < nAvailableTypes;i++) {
+        availableTypes[i] = is->readU32();
+        vlog.debug("Server offers security type %s (%d)",
+                   secTypeName(availableTypes[i]),
+                   availableTypes[i]);
+      }
 
-      } else
-	return false;
+      haveListOfTypes = true;
     }
 
     /* make a choice and send it to the server, meanwhile set up the stack */
@@ -190,13 +198,6 @@ bool CSecurityVeNCrypt::processMsg()
   }
 
   return csecurity->processMsg();
-}
-
-const char* CSecurityVeNCrypt::description() const
-{
-  if (csecurity)
-    return csecurity->description();
-  return "VeNCrypt";
 }
 
 bool CSecurityVeNCrypt::isSecure() const

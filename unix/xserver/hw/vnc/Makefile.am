@@ -5,21 +5,20 @@ RFB_LIB=$(TIGERVNC_BUILDDIR)/common/rfb/librfb.la
 RDR_LIB=$(TIGERVNC_BUILDDIR)/common/rdr/librdr.la
 OS_LIB=$(TIGERVNC_BUILDDIR)/common/os/libos.la
 NETWORK_LIB=$(TIGERVNC_BUILDDIR)/common/network/libnetwork.la
-XREGION_LIB=$(TIGERVNC_BUILDDIR)/common/Xregion/libXregion.la
 UNIXCOMMON_LIB=$(TIGERVNC_BUILDDIR)/unix/common/libunixcommon.la
-COMMON_LIBS=$(NETWORK_LIB) $(RFB_LIB) $(RDR_LIB) $(XREGION_LIB) $(OS_LIB) $(UNIXCOMMON_LIB)
+COMMON_LIBS=$(NETWORK_LIB) $(RFB_LIB) $(RDR_LIB) $(OS_LIB) $(UNIXCOMMON_LIB)
 
 noinst_LTLIBRARIES = libvnccommon.la
 
 HDRS = vncExtInit.h vncHooks.h \
 	vncBlockHandler.h vncSelection.h \
 	XorgGlue.h XserverDesktop.h xorg-version.h \
-	Input.h RFBGlue.h
+	vncInput.h RFBGlue.h
 
 libvnccommon_la_SOURCES = $(HDRS) \
 	vncExt.c vncExtInit.cc vncHooks.c vncSelection.c \
 	vncBlockHandler.c XorgGlue.c RandrGlue.c RFBGlue.cc XserverDesktop.cc \
-	Input.c InputXKB.c qnum_to_xorgevdev.c qnum_to_xorgkbd.c
+	vncInput.c vncInputXKB.c qnum_to_xorgevdev.c qnum_to_xorgkbd.c
 
 libvnccommon_la_CPPFLAGS = -DVENDOR_RELEASE="$(VENDOR_RELEASE)" -I$(TIGERVNC_SRCDIR)/unix/common \
 	-DVENDOR_STRING="\"$(VENDOR_STRING)\"" -I$(TIGERVNC_SRCDIR)/common -UHAVE_CONFIG_H \
@@ -45,8 +44,14 @@ Xvnc_CPPFLAGS = $(XVNC_CPPFLAGS) -DTIGERVNC -DNO_MODULE_EXTS \
 	-DVENDOR_STRING="\"$(VENDOR_STRING)\"" -I$(TIGERVNC_SRCDIR)/common -I$(TIGERVNC_SRCDIR)/unix/common \
 	-I$(top_srcdir)/include ${XSERVERLIBS_CFLAGS}
 
-Xvnc_LDADD = $(XVNC_LIBS) libvnccommon.la $(COMMON_LIBS) \
-	$(XSERVER_LIBS) $(XSERVER_SYS_LIBS) $(XVNC_SYS_LIBS) -lX11
+LOCAL_LIBS = \
+	$(XVNC_LIBS) \
+	$(XSERVER_LIBS) \
+	libvnccommon.la \
+	$(COMMON_LIBS)
+
+Xvnc_DEPENDENCIES = $(LOCAL_LIBS)
+Xvnc_LDADD = $(LOCAL_LIBS) $(XSERVER_SYS_LIBS) $(XVNC_SYS_LIBS) -lX11
 
 Xvnc_LDFLAGS = $(LD_EXPORT_SYMBOLS_FLAG)
 

@@ -28,6 +28,9 @@ namespace rfb {
   const int encodingHextile = 5;
   const int encodingTight = 7;
   const int encodingZRLE = 16;
+#ifdef HAVE_H264
+  const int encodingH264 = 50;
+#endif
 
   const int encodingMax = 255;
 
@@ -61,6 +64,7 @@ namespace rfb {
 
   // VMware-specific
   const int pseudoEncodingVMwareCursor = 0x574d5664;
+  const int pseudoEncodingVMwareCursorPosition = 0x574d5666;
   const int pseudoEncodingVMwareLEDState = 0x574d5668;
 
   // UltraVNC-specific

@@ -16,12 +16,21 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/Exception.h>
+#include <rfb/LogWriter.h>
 #include <rfb/SMsgHandler.h>
 #include <rfb/ScreenSet.h>
+#include <rfb/clipboardTypes.h>
 #include <rfb/encodings.h>
 
 using namespace rfb;
+
+static LogWriter vlog("SMsgHandler");
 
 SMsgHandler::SMsgHandler()
 {
@@ -66,6 +75,46 @@ void SMsgHandler::setEncodings(int nEncodings, const rdr::S32* encodings)
 
 void SMsgHandler::handleClipboardCaps(rdr::U32 flags, const rdr::U32* lengths)
 {
+  int i;
+
+  vlog.debug("Got client clipboard capabilities:");
+  for (i = 0;i < 16;i++) {
+    if (flags & (1 << i)) {
+      const char *type;
+
+      switch (1 << i) {
+        case clipboardUTF8:
+          type = "Plain text";
+          break;
+        case clipboardRTF:
+          type = "Rich text";
+          break;
+        case clipboardHTML:
+          type = "HTML";
+          break;
+        case clipboardDIB:
+          type = "Images";
+          break;
+        case clipboardFiles:
+          type = "Files";
+          break;
+        default:
+          vlog.debug("    Unknown format 0x%x", 1 << i);
+          continue;
+      }
+
+      if (lengths[i] == 0)
+        vlog.debug("    %s (only notify)", type);
+      else {
+        char bytes[1024];
+
+        iecPrefix(lengths[i], "B", bytes, sizeof(bytes));
+        vlog.debug("    %s (automatically send up to %s)",
+                   type, bytes);
+      }
+    }
+  }
+
   client.setClipboardCaps(flags, lengths);
 }
 

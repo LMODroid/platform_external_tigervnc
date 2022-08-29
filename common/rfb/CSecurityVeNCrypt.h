@@ -38,7 +38,6 @@ namespace rfb {
     ~CSecurityVeNCrypt();
     virtual bool processMsg();
     int getType() const {return chosenType;}
-    virtual const char* description() const;
     virtual bool isSecure() const;
 
   protected:
@@ -55,7 +54,6 @@ namespace rfb {
     rdr::U32 chosenType;
     rdr::U8 nAvailableTypes;
     rdr::U32 *availableTypes;
-    rdr::U8 iAvailableType;
   };
 }
 #endif

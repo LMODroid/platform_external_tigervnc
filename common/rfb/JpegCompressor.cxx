@@ -18,6 +18,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/JpegCompressor.h>
 #include <rdr/Exception.h>
 #include <rfb/Rect.h>
@@ -75,6 +79,7 @@ JpegOutputMessage(j_common_ptr cinfo)
 struct JPEG_DEST_MGR {
   struct jpeg_destination_mgr pub;
   JpegCompressor *instance;
+  size_t chunkSize;
 };
 
 static void
@@ -84,8 +89,8 @@ JpegInitDestination(j_compress_ptr cinfo)
   JpegCompressor *jc = dest->instance;
 
   jc->clear();
-  dest->pub.next_output_byte = jc->getptr();
-  dest->pub.free_in_buffer = jc->getend() - jc->getptr();
+  dest->pub.next_output_byte = jc->getptr(jc->length());
+  dest->pub.free_in_buffer = dest->chunkSize = jc->avail();
 }
 
 static boolean
@@ -94,10 +99,9 @@ JpegEmptyOutputBuffer(j_compress_ptr cinfo)
   JPEG_DEST_MGR *dest = (JPEG_DEST_MGR *)cinfo->dest;
   JpegCompressor *jc = dest->instance;
 
-  jc->setptr(jc->getend());
-  jc->overrun(jc->getend() - jc->getstart(), 1);
-  dest->pub.next_output_byte = jc->getptr();
-  dest->pub.free_in_buffer = jc->getend() - jc->getptr();
+  jc->setptr(jc->avail());
+  dest->pub.next_output_byte = jc->getptr(jc->length());
+  dest->pub.free_in_buffer = dest->chunkSize = jc->avail();
 
   return TRUE;
 }
@@ -108,7 +112,7 @@ JpegTermDestination(j_compress_ptr cinfo)
   JPEG_DEST_MGR *dest = (JPEG_DEST_MGR *)cinfo->dest;
   JpegCompressor *jc = dest->instance;
 
-  jc->setptr(dest->pub.next_output_byte);
+  jc->setptr(dest->chunkSize - dest->pub.free_in_buffer);
 }
 
 JpegCompressor::JpegCompressor(int bufferLen) : MemOutStream(bufferLen)

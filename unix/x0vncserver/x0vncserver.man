@@ -47,6 +47,11 @@ arbitrary.
 .SH PARAMETERS
 
 .TP
+.B \-desktop \fIdesktop-name\fP
+Each desktop has a name which may be displayed by the viewer. It defaults to
+"<user>@<hostname>".
+.
+.TP
 .B \-display \fIdisplay\fP
 The X display name.  If not specified, it defaults to the value of the
 DISPLAY environment variable.
@@ -55,7 +60,8 @@ DISPLAY environment variable.
 .B \-rfbport \fIport\fP
 Specifies the TCP port on which x0vncserver listens for connections from
 viewers (the protocol used in VNC is called RFB - "remote framebuffer").
-The default port is 5900.
+The default port is 5900. Specify \fB-1\fP to disable listening on a TCP
+port.
 .
 .TP
 .B \-UseIPv4
@@ -68,7 +74,7 @@ Use IPv6 for incoming and outgoing connections. Default is on.
 .TP
 .B \-rfbunixpath \fIpath\fP
 Specifies the path of a Unix domain socket on which x0vncserver listens for
-connections from viewers, instead of listening on a TCP port.
+connections from viewers.
 .
 .TP
 .B \-rfbunixmode \fImode\fP
@@ -170,6 +176,10 @@ connection.  Default is \fB10\fP.
 .B \-localhost
 Only allow connections from the same machine. Useful if you use SSH and want to
 stop non-SSH connections from any other hosts.
+.
+.TP
+.B \-interface \fIIP address\fP
+Listen on interface. By default x0vncserver listens on all available interfaces.
 .
 .TP
 .B \-AlwaysShared
@@ -296,21 +306,6 @@ Terminate when a client has been connected for \fIN\fP seconds.  Default is
 .TP
 .B \-MaxIdleTime \fIseconds\fP
 Terminate after \fIN\fP seconds of user inactivity.  Default is 0.
-.
-.TP
-.B \-ClientWaitTimeMillis \fItime\fP
-Time in milliseconds to wait for a viewer which is blocking the server. This is
-necessary because the server is single-threaded and sometimes blocks until the
-viewer has finished sending or receiving a message - note that this does not
-mean an update will be aborted after this time.  Default is 20000 (20 seconds).
-.
-.TP
-.B \-AcceptCutText
-.TQ
-.B \-SendCutText
-.TQ
-.B \-MaxCutText
-Currently unused.
 
 .SH SEE ALSO
 .BR Xvnc (1),

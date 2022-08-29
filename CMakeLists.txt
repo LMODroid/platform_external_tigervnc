@@ -2,10 +2,7 @@
 # Setup
 #
 
-cmake_minimum_required(VERSION 2.8.11)
-if(POLICY CMP0022)
-  cmake_policy(SET CMP0022 OLD)
-endif()
+cmake_minimum_required(VERSION 3.10.0)
 
 # Internal cmake modules
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
@@ -20,23 +17,24 @@ include(CheckCSourceRuns)
 
 include(CMakeMacroLibtoolFile)
 
+include(cmake/TargetLinkDirectories.cmake)
+
 project(tigervnc)
-set(VERSION 1.9.80)
+set(VERSION 1.12.80)
 
 # The RC version must always be four comma-separated numbers
-set(RCVERSION 1,9,80,0)
+set(RCVERSION 1,12,80,0)
 
 # Installation paths
-set(BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin")
-set(DATA_DIR "${CMAKE_INSTALL_PREFIX}/share")
-set(MAN_DIR "${DATA_DIR}/man")
-set(LOCALE_DIR "${DATA_DIR}/locale")
-set(DOC_DIR "${CMAKE_INSTALL_PREFIX}/share/doc/${CMAKE_PROJECT_NAME}-${VERSION}")
-
-if(WIN32)
-set(BIN_DIR "${CMAKE_INSTALL_PREFIX}")
-set(DOC_DIR "${CMAKE_INSTALL_PREFIX}")
+include(GNUInstallDirs)
+set(CMAKE_INSTALL_UNITDIR "lib/systemd/system" CACHE PATH "systemd unit files (lib/systemd/system)")
+if(IS_ABSOLUTE "${CMAKE_INSTALL_UNITDIR}")
+  set(CMAKE_INSTALL_FULL_UNITDIR "${CMAKE_INSTALL_UNITDIR}")
+else()
+  set(CMAKE_INSTALL_FULL_UNITDIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_UNITDIR}")
 endif()
+
+option(INSTALL_SYSTEMD_UNITS "Install TigerVNC systemd units" ON)
 
 if(MSVC)
   message(FATAL_ERROR "TigerVNC cannot be built with Visual Studio.  Please use MinGW")
@@ -66,6 +64,11 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -UNDEBUG")
 set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} -UNDEBUG")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -UNDEBUG")
 
+# But extra debug checks are still gated by this custom define
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
+  add_definitions(-D_DEBUG)
+ENDIF()
+
 # Make sure we get a sane C version
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 
@@ -77,6 +80,11 @@ IF(CMAKE_BUILD_TYPE MATCHES Debug)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror -Werror=vla")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Werror=vla")
 ENDIF()
+# clang doesn't support format_arg, which breaks this warning
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format-nonliteral -Wno-format-security")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format-nonliteral -Wno-format-security")
+endif()
 
 option(ENABLE_ASAN "Enable address sanitizer support" OFF)
 if(ENABLE_ASAN AND NOT WIN32 AND NOT APPLE)
@@ -94,29 +102,14 @@ if(NOT DEFINED BUILD_WINVNC)
   set(BUILD_WINVNC 1)
 endif()
 
-# Minimum version is Windows Vista/2008 (6.0)
+# Minimum version is Windows 7
 if(WIN32)
-  add_definitions(-D_WIN32_WINNT=0x0600)
+  add_definitions(-D_WIN32_WINNT=0x0601)
 endif()
 
-if(CMAKE_SIZEOF_VOID_P MATCHES 8)
-  message(STATUS "64-bit build")
-else()
-  message(STATUS "32-bit build")
-endif()
-
-# Versions of CMake before 2.8.7 do not properly support resource compilation
-# with MinGW.  Boo!
-if(MINGW AND "${CMAKE_VERSION}" VERSION_LESS "2.8.7")
-  if(NOT DEFINED RC)
-    set(CMAKE_RC_COMPILER_INIT windres)
-  else()
-    set(CMAKE_RC_COMPILER_INIT ${RC})
-  endif()
-  enable_language(RC)
-  message(STATUS "Resource compiler: ${CMAKE_RC_COMPILER}")
-  set(CMAKE_RC_COMPILE_OBJECT
-    "<CMAKE_RC_COMPILER> <FLAGS> <DEFINES> -o <OBJECT> --output-format=coff <SOURCE>")
+# Legacy macros (macOS 10.12 and older) conflict with our code
+if(APPLE)
+  add_definitions(-D__ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES=0)
 endif()
 
 # MinGW64 has header support but no library support for IActiveDesktop, so we
@@ -134,6 +127,9 @@ endif()
 
 # Check for zlib
 find_package(ZLIB REQUIRED)
+
+# Check for pixman
+find_package(Pixman REQUIRED)
 
 # Check for gettext
 option(ENABLE_NLS "Enable translation of program messages" ON)
@@ -176,6 +172,29 @@ if(ENABLE_NLS)
   endif()
 endif()
 
+option(ENABLE_H264 "Enable H.264 RFB encoding" ON)
+if(ENABLE_H264)
+  if(WIN32)
+    add_definitions("-DHAVE_H264")
+    set(H264_LIBS "WIN")  # may be LIBAV in the future
+    set(H264_LIBRARIES ole32 mfplat mfuuid wmcodecdspuuid)
+  else()
+    find_package(Ffmpeg)
+    if (AVCODEC_FOUND AND AVUTIL_FOUND AND SWSCALE_FOUND)
+      set(H264_INCLUDE_DIRS ${AVCODEC_INCLUDE_DIRS} ${AVUTIL_INCLUDE_DIRS} ${SWSCALE_INCLUDE_DIRS})
+      set(H264_LIBRARIES ${AVCODEC_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES})
+      set(H264_LIBRARY_DIRS ${AVCODEC_LIBRARY_DIRS} ${AVUTIL_LIBRARY_DIRS} ${SWSCALE_LIBRARY_DIRS})
+      add_definitions("-D__STDC_CONSTANT_MACROS")
+      add_definitions("-DHAVE_H264")
+      set(H264_LIBS "LIBAV")
+    else()
+      set(H264_LIBS "NONE")
+      message(WARNING "FFMPEG support can't be found")
+    endif()
+  endif()
+  add_definitions("-DH264_${H264_LIBS}")
+endif()
+
 # Check for libjpeg
 find_package(JPEG REQUIRED)
 
@@ -212,38 +231,38 @@ if(NOT FOUND_LIBJPEG_TURBO)
   message(STATUS "WARNING: You are not using libjpeg-turbo. Performance will suffer.")
 endif()
 
-include_directories(${JPEG_INCLUDE_DIR})
-
 option(BUILD_JAVA "Build Java version of the TigerVNC Viewer" FALSE)
 if(BUILD_JAVA)
   add_subdirectory(java)
 endif()
 
-# Check for FLTK
-set(FLTK_SKIP_FLUID TRUE)
-set(FLTK_SKIP_OPENGL TRUE)
-set(FLTK_SKIP_FORMS TRUE)
-find_package(FLTK)
-
-if(UNIX AND NOT APPLE)
-  # No proper handling for extra X11 libs that FLTK might need...
-  if(X11_Xft_FOUND)
-    # Xft headers include references to fontconfig, so we need
-    # to link to that as well
-    find_library(FONTCONFIG_LIB fontconfig)
-    set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xft_LIB} ${FONTCONFIG_LIB})
-  endif()
-  if(X11_Xinerama_FOUND)
-    set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xinerama_LIB})
-  endif()
-  if(X11_Xfixes_FOUND)
-    set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xfixes_LIB})
-  endif()
-  if(X11_Xcursor_FOUND)
-    set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xcursor_LIB})
-  endif()
-  if(X11_Xrender_FOUND)
-    set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xrender_LIB})
+option(BUILD_VIEWER "Build TigerVNC viewer" ON)
+if(BUILD_VIEWER)
+  # Check for FLTK
+  set(FLTK_SKIP_FLUID TRUE)
+  set(FLTK_SKIP_OPENGL TRUE)
+  set(FLTK_SKIP_FORMS TRUE)
+  find_package(FLTK REQUIRED)
+  if(UNIX AND NOT APPLE)
+    # No proper handling for extra X11 libs that FLTK might need...
+    if(X11_Xft_FOUND)
+      # Xft headers include references to fontconfig, so we need
+      # to link to that as well
+      find_library(FONTCONFIG_LIB fontconfig)
+      set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xft_LIB} ${FONTCONFIG_LIB})
+    endif()
+    if(X11_Xinerama_FOUND)
+      set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xinerama_LIB})
+    endif()
+    if(X11_Xfixes_FOUND)
+      set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xfixes_LIB})
+    endif()
+    if(X11_Xcursor_FOUND)
+      set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xcursor_LIB})
+    endif()
+    if(X11_Xrender_FOUND)
+      set(FLTK_LIBRARIES ${FLTK_LIBRARIES} ${X11_Xrender_LIB})
+    endif()
   endif()
 endif()
 
@@ -252,15 +271,12 @@ option(ENABLE_GNUTLS "Enable protocol encryption and advanced authentication" ON
 if(ENABLE_GNUTLS)
   find_package(GnuTLS)
   if (GNUTLS_FOUND)
-    include_directories(${GNUTLS_INCLUDE_DIR})
     add_definitions("-DHAVE_GNUTLS")
-    add_definitions(${GNUTLS_DEFINITIONS})
   endif()
 endif()
 
 # Check for PAM library
-option(ENABLE_PAM "Enable PAM authentication support" ON)
-if(ENABLE_PAM)
+if(UNIX AND NOT APPLE)
   check_include_files(security/pam_appl.h HAVE_PAM_H)
   set(CMAKE_REQUIRED_LIBRARIES -lpam)
   check_function_exists(pam_start HAVE_PAM_START)
@@ -268,10 +284,22 @@ if(ENABLE_PAM)
   if(HAVE_PAM_H AND HAVE_PAM_START)
     set(PAM_LIBS pam)
   else()
-    set(ENABLE_PAM 0)
+    message(FATAL_ERROR "Could not find PAM development files")
   endif()
 endif()
-set(HAVE_PAM ${ENABLE_PAM})
+
+# Check for SELinux library
+if(UNIX AND NOT APPLE)
+  check_include_files(selinux/selinux.h HAVE_SELINUX_H)
+  if(HAVE_SELINUX_H)
+    set(CMAKE_REQUIRED_LIBRARIES -lselinux)
+    set(CMAKE_REQUIRED_LIBRARIES)
+    set(SELINUX_LIBS selinux)
+    add_definitions("-DHAVE_SELINUX")
+  else()
+    message(WARNING "Could not find SELinux development files")
+  endif()
+endif()
 
 # Generate config.h and make sure the source finds it
 configure_file(config.h.in config.h)
@@ -295,7 +323,6 @@ if(ENABLE_NLS)
   add_subdirectory(po)
 endif()
 
-option(BUILD_VIEWER "Build TigerVNC viewer" ON)
 if(BUILD_VIEWER)
   add_subdirectory(vncviewer)
   add_subdirectory(media)
@@ -304,7 +331,9 @@ endif()
 add_subdirectory(tests)
 
 
-include(cmake/BuildPackages.cmake)
+if(BUILD_VIEWER)
+  add_subdirectory(release)
+endif()
 
 # uninstall
 configure_file("${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"

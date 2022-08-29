@@ -21,6 +21,10 @@
 // This header will define the Server interface, from which ServerMT and
 // ServerST will be derived.
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 #include <rfb/util.h>
 #include <rfb/ServerCore.h>
@@ -42,11 +46,6 @@ rfb::IntParameter rfb::Server::maxIdleTime
 ("MaxIdleTime",
  "Terminate after s seconds of user inactivity", 
  0, 0);
-rfb::IntParameter rfb::Server::clientWaitTimeMillis
-("ClientWaitTimeMillis",
- "The number of milliseconds to wait for a client which is no longer "
- "responding",
- 20000, 0);
 rfb::IntParameter rfb::Server::compareFB
 ("CompareFB",
  "Perform pixel comparison on framebuffer to reduce unnecessary updates "

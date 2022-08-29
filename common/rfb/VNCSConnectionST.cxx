@@ -18,6 +18,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <network/TcpSocket.h>
 
 #include <rfb/ComparingUpdateTracker.h>
@@ -52,14 +56,10 @@ VNCSConnectionST::VNCSConnectionST(VNCServerST* server_, network::Socket *s,
     losslessTimer(this), server(server_),
     updateRenderedCursor(false), removeRenderedCursor(false),
     continuousUpdates(false), encodeManager(this), idleTimer(this),
-    pointerEventTime(0), clientHasCursor(false),
-    authFailureTimer(this)
+    pointerEventTime(0), clientHasCursor(false)
 {
   setStreams(&sock->inStream(), &sock->outStream());
   peerEndpoint.buf = sock->getPeerEndpoint();
-
-  // Configure the socket
-  setSocketTimeouts();
 
   // Kick off the idle timer
   if (rfb::Server::idleTimeout) {
@@ -109,18 +109,29 @@ bool VNCSConnectionST::accessCheck(AccessRights ar) const
 
 void VNCSConnectionST::close(const char* reason)
 {
+  SConnection::close(reason);
+
   // Log the reason for the close
   if (!closeReason.buf)
     closeReason.buf = strDup(reason);
   else
     vlog.debug("second close: %s (%s)", peerEndpoint.buf, reason);
 
+  try {
+    if (sock->outStream().hasBufferedData()) {
+      sock->outStream().cork(false);
+      sock->outStream().flush();
+      if (sock->outStream().hasBufferedData())
+        vlog.error("Failed to flush remaining socket data on close");
+    }
+  } catch (rdr::Exception& e) {
+    vlog.error("Failed to flush remaining socket data on close: %s", e.str());
+  }
+
   // Just shutdown the socket and mark our state as closing.  Eventually the
   // calling code will call VNCServerST's removeSocket() method causing us to
   // be deleted.
   sock->shutdown();
-
-  SConnection::close(reason);
 }
 
 
@@ -142,40 +153,28 @@ void VNCSConnectionST::processMessages()
 {
   if (state() == RFBSTATE_CLOSING) return;
   try {
-    // - Now set appropriate socket timeouts and process data
-    setSocketTimeouts();
-
     inProcessMessages = true;
 
-    // Get the underlying TCP layer to build large packets if we send
+    // Get the underlying transport to build large packets if we send
     // multiple small responses.
-    sock->cork(true);
+    getOutStream()->cork(true);
 
-    while (getInStream()->checkNoWait(1)) {
-      // Silently drop any data if we are currently delaying an
-      // authentication failure response as otherwise we would close
-      // the connection on unexpected data, and an attacker could use
-      // that to detect our delayed state.
-      if (state() == RFBSTATE_SECURITY_FAILURE) {
-        getInStream()->skip(1);
-        continue;
-      }
-
-      if (pendingSyncFence) {
+    while (true) {
+      if (pendingSyncFence)
         syncFence = true;
-        pendingSyncFence = false;
-      }
 
-      processMsg();
+      if (!processMsg())
+        break;
 
       if (syncFence) {
         writer()->writeFence(fenceFlags, fenceDataLen, fenceData);
         syncFence = false;
+        pendingSyncFence = false;
       }
     }
 
     // Flush out everything in case we go idle after this.
-    sock->cork(false);
+    getOutStream()->cork(false);
 
     inProcessMessages = false;
 
@@ -194,11 +193,10 @@ void VNCSConnectionST::flushSocket()
 {
   if (state() == RFBSTATE_CLOSING) return;
   try {
-    setSocketTimeouts();
     sock->outStream().flush();
     // Flushing the socket might release an update that was previously
     // delayed because of congestion.
-    if (sock->outStream().bufferUsage() == 0)
+    if (!sock->outStream().hasBufferedData())
       writeFramebufferUpdate();
   } catch (rdr::Exception &e) {
     close(e.str());
@@ -376,6 +374,15 @@ void VNCSConnectionST::renderedCursorChange()
   }
 }
 
+// cursorPositionChange() is called whenever the cursor has changed position by
+// the server.  If the client supports being informed about these changes then
+// it will arrange for the new cursor position to be sent to the client.
+
+void VNCSConnectionST::cursorPositionChange()
+{
+  setCursorPos();
+}
+
 // needRenderedCursor() returns true if this client needs the server-side
 // rendered cursor.  This may be because it does not support local cursor or
 // because the current cursor position has not been set by this client.
@@ -435,14 +442,6 @@ void VNCSConnectionST::authSuccess()
 
   // - Mark the entire display as "dirty"
   updates.add_changed(server->getPixelBuffer()->getRect());
-}
-
-void VNCSConnectionST::authFailure(const char* reason)
-{
-  // Introduce a slight delay of the authentication failure response
-  // to make it difficult to brute force a password
-  authFailureMsg.replaceBuf(strDup(reason));
-  authFailureTimer.start(100);
 }
 
 void VNCSConnectionST::queryConnection(const char* userName)
@@ -519,8 +518,7 @@ void VNCSConnectionST::keyEvent(rdr::U32 keysym, rdr::U32 keycode, bool down) {
   // Avoid lock keys if we don't know the server state
   if ((server->getLEDState() == ledUnknown) &&
       ((keysym == XK_Caps_Lock) ||
-       (keysym == XK_Num_Lock) ||
-       (keysym == XK_Scroll_Lock))) {
+       (keysym == XK_Num_Lock))) {
     vlog.debug("Ignoring lock key (e.g. caps lock)");
     return;
   }
@@ -528,13 +526,6 @@ void VNCSConnectionST::keyEvent(rdr::U32 keysym, rdr::U32 keycode, bool down) {
   // Lock key heuristics
   // (only for clients that do not support the LED state extension)
   if (!client.supportsLEDState()) {
-    // Always ignore ScrollLock as we don't have a heuristic
-    // for that
-    if (keysym == XK_Scroll_Lock) {
-      vlog.debug("Ignoring lock key (e.g. caps lock)");
-      return;
-    }
-
     if (down && (server->getLEDState() != ledUnknown)) {
       // CapsLock synchronisation heuristic
       // (this assumes standard interaction between CapsLock the Shift
@@ -636,7 +627,7 @@ void VNCSConnectionST::framebufferUpdateRequest(const Rect& r,bool incremental)
 
   // Just update the requested region.
   // Framebuffer update will be sent a bit later, see processMessages().
-  Region reqRgn(r);
+  Region reqRgn(safeRect);
   if (!incremental || !continuousUpdates)
     requested.assign_union(reqRgn);
 
@@ -660,11 +651,21 @@ void VNCSConnectionST::setDesktopSize(int fb_width, int fb_height,
                                       const ScreenSet& layout)
 {
   unsigned int result;
+  char buffer[2048];
 
-  if (!accessCheck(AccessSetDesktopSize)) return;
-  if (!rfb::Server::acceptSetDesktopSize) return;
+  vlog.debug("Got request for framebuffer resize to %dx%d",
+             fb_width, fb_height);
+  layout.print(buffer, sizeof(buffer));
+  vlog.debug("%s", buffer);
 
-  result = server->setDesktopSize(this, fb_width, fb_height, layout);
+  if (!accessCheck(AccessSetDesktopSize) ||
+      !rfb::Server::acceptSetDesktopSize) {
+    vlog.debug("Rejecting unauthorized framebuffer resize request");
+    result = resultProhibited;
+  } else {
+    result = server->setDesktopSize(this, fb_width, fb_height, layout);
+  }
+
   writer()->writeDesktopSize(reasonClient, result);
 }
 
@@ -795,8 +796,6 @@ bool VNCSConnectionST::handleTimeout(Timer* t)
     if ((t == &congestionTimer) ||
         (t == &losslessTimer))
       writeFramebufferUpdate();
-    else if (t == &authFailureTimer)
-      SConnection::authFailure(authFailureMsg.buf);
   } catch (rdr::Exception& e) {
     close(e.str());
   }
@@ -849,7 +848,7 @@ bool VNCSConnectionST::isCongested()
   // Stuff still waiting in the send buffer?
   sock->outStream().flush();
   congestion.debugTrace("congestion-trace.csv", sock->getFd());
-  if (sock->outStream().bufferUsage() > 0)
+  if (sock->outStream().hasBufferedData())
     return true;
 
   if (!client.supportsFence())
@@ -897,7 +896,7 @@ void VNCSConnectionST::writeFramebufferUpdate()
   // mode, we will also have small fence messages around the update. We
   // need to aggregate these in order to not clog up TCP's congestion
   // window.
-  sock->cork(true);
+  getOutStream()->cork(true);
 
   // First take care of any updates that cannot contain framebuffer data
   // changes.
@@ -906,7 +905,7 @@ void VNCSConnectionST::writeFramebufferUpdate()
   // Then real data (if possible)
   writeDataUpdate();
 
-  sock->cork(false);
+  getOutStream()->cork(false);
 
   congestion.updatePosition(sock->outStream().length());
 }
@@ -1146,6 +1145,21 @@ void VNCSConnectionST::setCursor()
     writer()->writeCursor();
 }
 
+// setCursorPos() is called whenever the cursor has changed position by the
+// server.  If the client supports being informed about these changes then it
+// will arrange for the new cursor position to be sent to the client.
+
+void VNCSConnectionST::setCursorPos()
+{
+  if (state() != RFBSTATE_NORMAL)
+    return;
+
+  if (client.supportsCursorPosition()) {
+    client.setCursorPos(server->getCursorPos());
+    writer()->writeCursorPos();
+  }
+}
+
 void VNCSConnectionST::setDesktopName(const char *name)
 {
   client.setName(name);
@@ -1166,13 +1180,4 @@ void VNCSConnectionST::setLEDState(unsigned int ledstate)
 
   if (client.supportsLEDState())
     writer()->writeLEDState();
-}
-
-void VNCSConnectionST::setSocketTimeouts()
-{
-  int timeoutms = rfb::Server::clientWaitTimeMillis;
-  if (timeoutms == 0)
-    timeoutms = -1;
-  sock->inStream().setTimeout(timeoutms);
-  sock->outStream().setTimeout(timeoutms);
 }

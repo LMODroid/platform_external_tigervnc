@@ -17,6 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/Exception.h>
 #include <rfb/ledStates.h>
 #include <rfb/ServerParams.h>
@@ -85,6 +90,18 @@ void ServerParams::setCursor(const Cursor& other)
 void ServerParams::setLEDState(unsigned int state)
 {
   ledState_ = state;
+}
+
+rdr::U32 ServerParams::clipboardSize(unsigned int format) const
+{
+  int i;
+
+  for (i = 0;i < 16;i++) {
+    if (((unsigned)1 << i) == format)
+      return clipSizes[i];
+  }
+
+  throw Exception("Invalid clipboard format 0x%x", format);
 }
 
 void ServerParams::setClipboardCaps(rdr::U32 flags, const rdr::U32* lengths)

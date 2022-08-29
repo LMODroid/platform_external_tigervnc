@@ -17,6 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/Exception.h>
 #include <rfb/encodings.h>
 #include <rfb/ledStates.h>
@@ -30,7 +35,7 @@ ClientParams::ClientParams()
     compressLevel(2), qualityLevel(-1), fineQualityLevel(-1),
     subsampling(subsampleUndefined),
     width_(0), height_(0), name_(0),
-    ledState_(ledUnknown)
+    cursorPos_(0, 0), ledState_(ledUnknown)
 {
   setName("");
 
@@ -83,6 +88,11 @@ void ClientParams::setCursor(const Cursor& other)
 {
   delete cursor_;
   cursor_ = new Cursor(other);
+}
+
+void ClientParams::setCursorPos(const Point& pos)
+{
+  cursorPos_ = pos;
 }
 
 bool ClientParams::supportsEncoding(rdr::S32 encoding) const
@@ -143,6 +153,18 @@ void ClientParams::setLEDState(unsigned int state)
   ledState_ = state;
 }
 
+rdr::U32 ClientParams::clipboardSize(unsigned int format) const
+{
+  int i;
+
+  for (i = 0;i < 16;i++) {
+    if (((unsigned)1 << i) == format)
+      return clipSizes[i];
+  }
+
+  throw Exception("Invalid clipboard format 0x%x", format);
+}
+
 void ClientParams::setClipboardCaps(rdr::U32 flags, const rdr::U32* lengths)
 {
   int i, num;
@@ -166,6 +188,13 @@ bool ClientParams::supportsLocalCursor() const
   if (supportsEncoding(pseudoEncodingCursor))
     return true;
   if (supportsEncoding(pseudoEncodingXCursor))
+    return true;
+  return false;
+}
+
+bool ClientParams::supportsCursorPosition() const
+{
+  if (supportsEncoding(pseudoEncodingVMwareCursorPosition))
     return true;
   return false;
 }

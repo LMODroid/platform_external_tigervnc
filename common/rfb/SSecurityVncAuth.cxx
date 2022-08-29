@@ -21,6 +21,10 @@
 // XXX not thread-safe, because d3des isn't - do we need to worry about this?
 //
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/SSecurityVncAuth.h>
 #include <rdr/RandomStream.h>
 #include <rfb/SConnection.h>
@@ -49,7 +53,7 @@ VncAuthPasswdParameter SSecurityVncAuth::vncAuthPasswd
  "access the server", &SSecurityVncAuth::vncAuthPasswdFile);
 
 SSecurityVncAuth::SSecurityVncAuth(SConnection* sc)
-  : SSecurity(sc), sentChallenge(false), responsePos(0),
+  : SSecurity(sc), sentChallenge(false),
     pg(&vncAuthPasswd), accessRights(0)
 {
 }
@@ -78,6 +82,8 @@ bool SSecurityVncAuth::processMsg()
 
   if (!sentChallenge) {
     rdr::RandomStream rs;
+    if (!rs.hasData(vncAuthChallengeSize))
+      throw Exception("Could not generate random data for VNC auth challenge");
     rs.readBytes(challenge, vncAuthChallengeSize);
     os->writeBytes(challenge, vncAuthChallengeSize);
     os->flush();
@@ -85,10 +91,10 @@ bool SSecurityVncAuth::processMsg()
     return false;
   }
 
-  while (responsePos < vncAuthChallengeSize && is->checkNoWait(1))
-    response[responsePos++] = is->readU8();
+  if (!is->hasData(vncAuthChallengeSize))
+    return false;
 
-  if (responsePos < vncAuthChallengeSize) return false;
+  is->readBytes(response, vncAuthChallengeSize);
 
   PlainPasswd passwd, passwdReadOnly;
   pg->getVncAuthPasswd(&passwd, &passwdReadOnly);

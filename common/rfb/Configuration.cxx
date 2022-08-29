@@ -20,6 +20,10 @@
 
 // -=- Configuration.cxx
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -376,7 +380,7 @@ IntParameter::operator int() const {
 
 StringParameter::StringParameter(const char* name_, const char* desc_,
                                  const char* v, ConfigurationObject co)
-  : VoidParameter(name_, desc_, co), value(strDup(v)), def_value(v)
+  : VoidParameter(name_, desc_, co), value(strDup(v)), def_value(strDup(v))
 {
   if (!v) {
     vlog.error("Default value <null> for %s not allowed",name_);
@@ -386,12 +390,7 @@ StringParameter::StringParameter(const char* name_, const char* desc_,
 
 StringParameter::~StringParameter() {
   strFree(value);
-}
-
-void StringParameter::setDefaultStr(const char* v) {
-  def_value = v;
-  strFree(value);
-  value = strDup(v);
+  strFree(def_value);
 }
 
 bool StringParameter::setParam(const char* v) {
@@ -421,17 +420,20 @@ StringParameter::operator const char *() const {
 // -=- BinaryParameter
 
 BinaryParameter::BinaryParameter(const char* name_, const char* desc_,
-				 const void* v, int l, ConfigurationObject co)
-: VoidParameter(name_, desc_, co), value(0), length(0), def_value((char*)v), def_length(l) {
+				 const void* v, size_t l, ConfigurationObject co)
+: VoidParameter(name_, desc_, co), value(0), length(0), def_value(0), def_length(0) {
   if (l) {
     value = new char[l];
     length = l;
     memcpy(value, v, l);
+    def_value = new char[l];
+    def_length = l;
+    memcpy(def_value, v, l);
   }
 }
 BinaryParameter::~BinaryParameter() {
-  if (value)
-    delete [] value;
+  delete [] value;
+  delete [] def_value;
 }
 
 bool BinaryParameter::setParam(const char* v) {
@@ -441,7 +443,7 @@ bool BinaryParameter::setParam(const char* v) {
   return rdr::HexInStream::hexStrToBin(v, &value, &length);
 }
 
-void BinaryParameter::setParam(const void* v, int len) {
+void BinaryParameter::setParam(const void* v, size_t len) {
   LOCK_CONFIG;
   if (immutable) return; 
   vlog.debug("set %s(Binary)", getName());
@@ -462,7 +464,7 @@ char* BinaryParameter::getValueStr() const {
   return rdr::HexOutStream::binToHexStr(value, length);
 }
 
-void BinaryParameter::getData(void** data_, int* length_) const {
+void BinaryParameter::getData(void** data_, size_t* length_) const {
   LOCK_CONFIG;
   if (length_) *length_ = length;
   if (data_) {

@@ -17,6 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdio.h>
 
 #include <rdr/OutStream.h>
@@ -42,7 +47,8 @@ SMsgWriter::SMsgWriter(ClientParams* client_, rdr::OutStream* os_)
   : client(client_), os(os_),
     nRectsInUpdate(0), nRectsInHeader(0),
     needSetDesktopName(false), needCursor(false),
-    needLEDState(false), needQEMUKeyEvent(false)
+    needCursorPos(false), needLEDState(false),
+    needQEMUKeyEvent(false)
 {
 }
 
@@ -56,7 +62,8 @@ void SMsgWriter::writeServerInit(rdr::U16 width, rdr::U16 height,
   os->writeU16(width);
   os->writeU16(height);
   pf.write(os);
-  os->writeString(name);
+  os->writeU32(strlen(name));
+  os->writeBytes(name, strlen(name));
   endMsg();
 }
 
@@ -268,6 +275,14 @@ void SMsgWriter::writeCursor()
   needCursor = true;
 }
 
+void SMsgWriter::writeCursorPos()
+{
+  if (!client->supportsEncoding(pseudoEncodingVMwareCursorPosition))
+    throw Exception("Client does not support cursor position");
+
+  needCursorPos = true;
+}
+
 void SMsgWriter::writeLEDState()
 {
   if (!client->supportsEncoding(pseudoEncodingLEDState) &&
@@ -292,6 +307,8 @@ bool SMsgWriter::needFakeUpdate()
   if (needSetDesktopName)
     return true;
   if (needCursor)
+    return true;
+  if (needCursorPos)
     return true;
   if (needLEDState)
     return true;
@@ -338,6 +355,8 @@ void SMsgWriter::writeFramebufferUpdateStart(int nRects)
     if (needSetDesktopName)
       nRects++;
     if (needCursor)
+      nRects++;
+    if (needCursorPos)
       nRects++;
     if (needLEDState)
       nRects++;
@@ -454,6 +473,18 @@ void SMsgWriter::writePseudoRects()
     needCursor = false;
   }
 
+  if (needCursorPos) {
+    const Point& cursorPos = client->cursorPos();
+
+    if (client->supportsEncoding(pseudoEncodingVMwareCursorPosition)) {
+      writeSetVMwareCursorPositionRect(cursorPos.x, cursorPos.y);
+    } else {
+      throw Exception("Client does not support cursor position");
+    }
+
+    needCursorPos = false;
+  }
+
   if (needSetDesktopName) {
     writeSetDesktopNameRect(client->name());
     needSetDesktopName = false;
@@ -551,7 +582,8 @@ void SMsgWriter::writeSetDesktopNameRect(const char *name)
   os->writeU16(0);
   os->writeU16(0);
   os->writeU32(pseudoEncodingDesktopName);
-  os->writeString(name);
+  os->writeU32(strlen(name));
+  os->writeBytes(name, strlen(name));
 }
 
 void SMsgWriter::writeSetCursorRect(int width, int height,
@@ -646,6 +678,20 @@ void SMsgWriter::writeSetVMwareCursorRect(int width, int height,
 
   // FIXME: Should alpha be premultiplied?
   os->writeBytes(data, width*height*4);
+}
+
+void SMsgWriter::writeSetVMwareCursorPositionRect(int hotspotX, int hotspotY)
+{
+  if (!client->supportsEncoding(pseudoEncodingVMwareCursorPosition))
+    throw Exception("Client does not support cursor position");
+  if (++nRectsInUpdate > nRectsInHeader && nRectsInHeader)
+    throw Exception("SMsgWriter::writeSetVMwareCursorRect: nRects out of sync");
+
+  os->writeS16(hotspotX);
+  os->writeS16(hotspotY);
+  os->writeU16(0);
+  os->writeU16(0);
+  os->writeU32(pseudoEncodingVMwareCursorPosition);
 }
 
 void SMsgWriter::writeLEDStateRect(rdr::U8 state)

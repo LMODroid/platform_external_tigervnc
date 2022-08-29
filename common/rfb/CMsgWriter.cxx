@@ -16,6 +16,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdio.h>
 
 #include <rdr/OutStream.h>
@@ -61,7 +66,7 @@ void CMsgWriter::writeSetEncodings(const std::list<rdr::U32> encodings)
 {
   std::list<rdr::U32>::const_iterator iter;
   startMsg(msgTypeSetEncodings);
-  os->skip(1);
+  os->pad(1);
   os->writeU16(encodings.size());
   for (iter = encodings.begin(); iter != encodings.end(); ++iter)
     os->writeU32(*iter);

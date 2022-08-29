@@ -66,6 +66,9 @@ public:
   void setCursor(int width, int height, const rfb::Point& hotspot,
                  const rdr::U8* data);
 
+  // Server-provided cursor position
+  void setCursorPos(const rfb::Point& pos);
+
   // Change client LED state
   void setLEDState(unsigned int state);
 
@@ -89,8 +92,12 @@ private:
   void setOverlay(const char *text, ...) __printf_attr(2, 3);
   static void updateOverlay(void *data);
 
-  static int fltkHandle(int event, Fl_Window *win);
+  static int fltkDispatch(int event, Fl_Window *win);
+  static int fltkHandle(int event);
 
+  bool hasFocus();
+
+  void maybeGrabKeyboard();
   void grabKeyboard();
   void ungrabKeyboard();
   void grabPointer();
@@ -102,6 +109,7 @@ private:
 
   void handleDesktopSize();
   static void handleResizeTimeout(void *data);
+  static void reconfigureFullscreen(void *data);
   void remoteResize(int width, int height);
 
   void repositionWidgets();

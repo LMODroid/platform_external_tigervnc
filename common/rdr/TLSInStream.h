@@ -20,34 +20,28 @@
 #ifndef __RDR_TLSINSTREAM_H__
 #define __RDR_TLSINSTREAM_H__
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #ifdef HAVE_GNUTLS
 
 #include <gnutls/gnutls.h>
-#include <rdr/InStream.h>
+#include <rdr/BufferedInStream.h>
 
 namespace rdr {
 
-  class TLSInStream : public InStream {
+  class TLSInStream : public BufferedInStream {
   public:
     TLSInStream(InStream* in, gnutls_session_t session);
     virtual ~TLSInStream();
 
-    int pos();
-
   private:
-    int overrun(int itemSize, int nItems, bool wait);
-    int readTLS(U8* buf, int len, bool wait);
+    virtual bool fillBuffer();
+    size_t readTLS(U8* buf, size_t len);
     static ssize_t pull(gnutls_transport_ptr_t str, void* data, size_t size);
 
     gnutls_session_t session;
     InStream* in;
-    int bufSize;
-    int offset;
-    U8* start;
+
+    bool streamEmpty;
+    Exception* saved_exception;
   };
 };
 

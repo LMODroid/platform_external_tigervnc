@@ -48,7 +48,7 @@ namespace rfb {
     // which we are connected.  This might be the result of getPeerEndpoint on
     // a TcpSocket, for example, or a host specified by DNS name & port.
     // The serverName is used when verifying the Identity of a host (see RA2).
-    void setServerName(const char* name_) { serverName.replaceBuf(strDup(name_)); }
+    void setServerName(const char* name_);
 
     // setStreams() sets the streams to be used for the connection.  These must
     // be set before initialiseProtocol() and processMsg() are called.  The
@@ -84,7 +84,12 @@ namespace rfb {
     //   In this case, processMsg should always process the available RFB
     //   message before returning.
     // NB: In either case, you must have called initialiseProtocol() first.
-    void processMsg();
+    bool processMsg();
+
+    // close() gracefully shuts down the connection to the server and
+    // should be called before terminating the underlying network
+    // connection
+    void close();
 
 
     // Methods overridden from CMsgHandler
@@ -102,12 +107,12 @@ namespace rfb {
                             const PixelFormat& pf,
                             const char* name);
 
-    virtual void readAndDecodeRect(const Rect& r, int encoding,
+    virtual bool readAndDecodeRect(const Rect& r, int encoding,
                                    ModifiablePixelBuffer* pb);
 
     virtual void framebufferUpdateStart();
     virtual void framebufferUpdateEnd();
-    virtual void dataRect(const Rect& r, int encoding);
+    virtual bool dataRect(const Rect& r, int encoding);
 
     virtual void serverCutText(const char* str);
 
@@ -211,8 +216,10 @@ namespace rfb {
       RFBSTATE_SECURITY_TYPES,
       RFBSTATE_SECURITY,
       RFBSTATE_SECURITY_RESULT,
+      RFBSTATE_SECURITY_REASON,
       RFBSTATE_INITIALISATION,
       RFBSTATE_NORMAL,
+      RFBSTATE_CLOSING,
       RFBSTATE_INVALID
     };
 
@@ -232,6 +239,7 @@ namespace rfb {
     // Optional capabilities that a subclass is expected to set to true
     // if supported
     bool supportsLocalCursor;
+    bool supportsCursorPosition;
     bool supportsDesktopResize;
     bool supportsLEDState;
 
@@ -243,13 +251,13 @@ namespace rfb {
     virtual void fence(rdr::U32 flags, unsigned len, const char data[]);
 
   private:
-    void processVersionMsg();
-    void processSecurityTypesMsg();
-    void processSecurityMsg();
-    void processSecurityResultMsg();
-    void processInitMsg();
+    bool processVersionMsg();
+    bool processSecurityTypesMsg();
+    bool processSecurityMsg();
+    bool processSecurityResultMsg();
+    bool processSecurityReasonMsg();
+    bool processInitMsg();
     void throwAuthFailureException();
-    void throwConnFailedException();
     void securityCompleted();
 
     void requestNewUpdate();
@@ -287,6 +295,7 @@ namespace rfb {
 
     char* serverClipboard;
     bool hasLocalClipboard;
+    bool unsolicitedClipboardAttempt;
   };
 }
 #endif

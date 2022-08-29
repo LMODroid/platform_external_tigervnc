@@ -16,6 +16,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <tchar.h>
 #include <rfb_win32/MonitorInfo.h>
 #include <rfb_win32/Win32Util.h>
@@ -36,7 +40,7 @@ using namespace win32;
 static LogWriter vlog("MonitorInfo");
 
 
-static void fillMonitorInfo(HMONITOR monitor, MonitorInfo* mi) {
+static void fillMonitorInfo(HMONITOR monitor, MONITORINFOEXA* mi) {
   vlog.debug("monitor=%p", monitor);
   memset(mi, 0, sizeof(MONITORINFOEXA));
   mi->cbSize = sizeof(MONITORINFOEXA);
@@ -70,7 +74,7 @@ MonitorInfo::MonitorInfo(const RECT& r) {
 
 
 struct monitorByNameData {
-  MonitorInfo* info;
+  MONITORINFOEXA* info;
   const char* monitorName;
 };
 

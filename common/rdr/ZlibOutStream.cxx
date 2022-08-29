@@ -17,6 +17,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdio.h>
 
 #include <rdr/ZlibOutStream.h>
@@ -31,11 +35,8 @@ static rfb::LogWriter vlog("ZlibOutStream");
 
 using namespace rdr;
 
-enum { DEFAULT_BUF_SIZE = 16384 };
-
-ZlibOutStream::ZlibOutStream(OutStream* os, int bufSize_, int compressLevel)
-  : underlying(os), compressionLevel(compressLevel), newLevel(compressLevel),
-    bufSize(bufSize_ ? bufSize_ : DEFAULT_BUF_SIZE), offset(0)
+ZlibOutStream::ZlibOutStream(OutStream* os, int compressLevel)
+  : underlying(os), compressionLevel(compressLevel), newLevel(compressLevel)
 {
   zs = new z_stream;
   zs->zalloc    = Z_NULL;
@@ -47,8 +48,6 @@ ZlibOutStream::ZlibOutStream(OutStream* os, int bufSize_, int compressLevel)
     delete zs;
     throw Exception("ZlibOutStream: deflateInit failed");
   }
-  ptr = start = new U8[bufSize];
-  end = start + bufSize;
 }
 
 ZlibOutStream::~ZlibOutStream()
@@ -57,7 +56,6 @@ ZlibOutStream::~ZlibOutStream()
     flush();
   } catch (Exception&) {
   }
-  delete [] start;
   deflateEnd(zs);
   delete zs;
 }
@@ -65,6 +63,8 @@ ZlibOutStream::~ZlibOutStream()
 void ZlibOutStream::setUnderlying(OutStream* os)
 {
   underlying = os;
+  if (underlying)
+    underlying->cork(corked);
 }
 
 void ZlibOutStream::setCompressionLevel(int level)
@@ -75,65 +75,37 @@ void ZlibOutStream::setCompressionLevel(int level)
   newLevel = level;
 }
 
-int ZlibOutStream::length()
+void ZlibOutStream::flush()
 {
-  return offset + ptr - start;
+  BufferedOutStream::flush();
+  if (underlying != NULL)
+    underlying->flush();
 }
 
-void ZlibOutStream::flush()
+void ZlibOutStream::cork(bool enable)
+{
+  BufferedOutStream::cork(enable);
+  if (underlying != NULL)
+    underlying->cork(enable);
+}
+
+bool ZlibOutStream::flushBuffer()
 {
   checkCompressionLevel();
 
-  zs->next_in = start;
-  zs->avail_in = ptr - start;
+  zs->next_in = sentUpTo;
+  zs->avail_in = ptr - sentUpTo;
 
 #ifdef ZLIBOUT_DEBUG
   vlog.debug("flush: avail_in %d",zs->avail_in);
 #endif
 
   // Force out everything from the zlib encoder
-  deflate(Z_SYNC_FLUSH);
+  deflate(corked ? Z_NO_FLUSH : Z_SYNC_FLUSH);
 
-  offset += ptr - start;
-  ptr = start;
-}
+  sentUpTo = zs->next_in;
 
-int ZlibOutStream::overrun(int itemSize, int nItems)
-{
-#ifdef ZLIBOUT_DEBUG
-  vlog.debug("overrun");
-#endif
-
-  if (itemSize > bufSize)
-    throw Exception("ZlibOutStream overrun: max itemSize exceeded");
-
-  checkCompressionLevel();
-
-  while (end - ptr < itemSize) {
-    zs->next_in = start;
-    zs->avail_in = ptr - start;
-
-    deflate(Z_NO_FLUSH);
-
-    // output buffer not full
-
-    if (zs->avail_in == 0) {
-      offset += ptr - start;
-      ptr = start;
-    } else {
-      // but didn't consume all the data?  try shifting what's left to the
-      // start of the buffer.
-      vlog.info("z out buf not full, but in data not consumed");
-      memmove(start, zs->next_in, ptr - zs->next_in);
-      offset += zs->next_in - start;
-      ptr -= zs->next_in - start;
-    }
-  }
-
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
-
-  return nItems;
+  return true;
 }
 
 void ZlibOutStream::deflate(int flush)
@@ -147,9 +119,9 @@ void ZlibOutStream::deflate(int flush)
     return;
 
   do {
-    underlying->check(1);
-    zs->next_out = underlying->getptr();
-    zs->avail_out = underlying->getend() - underlying->getptr();
+    size_t chunk;
+    zs->next_out = underlying->getptr(1);
+    zs->avail_out = chunk = underlying->avail();
 
 #ifdef ZLIBOUT_DEBUG
     vlog.debug("calling deflate, avail_in %d, avail_out %d",
@@ -157,7 +129,7 @@ void ZlibOutStream::deflate(int flush)
 #endif
 
     rc = ::deflate(zs, flush);
-    if (rc != Z_OK) {
+    if (rc < 0) {
       // Silly zlib returns an error if you try to flush something twice
       if ((rc == Z_BUF_ERROR) && (flush != Z_NO_FLUSH))
         break;
@@ -170,7 +142,7 @@ void ZlibOutStream::deflate(int flush)
                zs->next_out-underlying->getptr());
 #endif
 
-    underlying->setptr(zs->next_out);
+    underlying->setptr(chunk - zs->avail_out);
   } while (zs->avail_out == 0);
 }
 
@@ -191,7 +163,7 @@ void ZlibOutStream::checkCompressionLevel()
     deflate(Z_SYNC_FLUSH);
 
     rc = deflateParams (zs, newLevel, Z_DEFAULT_STRATEGY);
-    if (rc != Z_OK) {
+    if (rc < 0) {
       // The implicit flush can result in this error, caused by the
       // explicit flush we did above. It should be safe to ignore though
       // as the first flush should have left things in a stable state...

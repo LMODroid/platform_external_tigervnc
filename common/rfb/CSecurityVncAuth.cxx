@@ -21,6 +21,10 @@
 // XXX not thread-safe, because d3des isn't - do we need to worry about this?
 //
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 #include <stdio.h>
 
@@ -44,6 +48,9 @@ bool CSecurityVncAuth::processMsg()
 {
   rdr::InStream* is = cc->getInStream();
   rdr::OutStream* os = cc->getOutStream();
+
+  if (!is->hasData(vncAuthChallengeSize))
+    return false;
 
   // Read the challenge & obtain the user's password
   rdr::U8 challenge[vncAuthChallengeSize];

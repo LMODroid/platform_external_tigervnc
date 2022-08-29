@@ -52,6 +52,7 @@ namespace rfb {
                                         const ScreenSet& layout);
     virtual void setCursor(int width, int height, const Point& hotspot,
                            const rdr::U8* data) = 0;
+    virtual void setCursorPos(const Point& pos) = 0;
     virtual void setPixelFormat(const PixelFormat& pf);
     virtual void setName(const char* name);
     virtual void fence(rdr::U32 flags, unsigned len, const char data[]);
@@ -61,12 +62,12 @@ namespace rfb {
                             const PixelFormat& pf,
                             const char* name) = 0;
 
-    virtual void readAndDecodeRect(const Rect& r, int encoding,
+    virtual bool readAndDecodeRect(const Rect& r, int encoding,
                                    ModifiablePixelBuffer* pb) = 0;
 
     virtual void framebufferUpdateStart();
     virtual void framebufferUpdateEnd();
-    virtual void dataRect(const Rect& r, int encoding) = 0;
+    virtual bool dataRect(const Rect& r, int encoding) = 0;
 
     virtual void setColourMapEntries(int firstColour, int nColours,
 				     rdr::U16* rgbs) = 0;

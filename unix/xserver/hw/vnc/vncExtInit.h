@@ -73,14 +73,15 @@ struct UpdateRect {
   short x1, y1, x2, y2;
 };
 
-void vncAddChanged(int scrIdx, const struct UpdateRect *extents,
-                   int nRects, const struct UpdateRect *rects);
-void vncAddCopied(int scrIdx, const struct UpdateRect *extents,
-                  int nRects, const struct UpdateRect *rects,
+void vncAddChanged(int scrIdx, int nRects,
+                   const struct UpdateRect *rects);
+void vncAddCopied(int scrIdx, int nRects,
+                  const struct UpdateRect *rects,
                   int dx, int dy);
 
-void vncSetCursor(int width, int height, int hotX, int hotY,
-                  const unsigned char *rgbaData);
+void vncSetCursorSprite(int width, int height, int hotX, int hotY,
+                        const unsigned char *rgbaData);
+void vncSetCursorPos(int scrIdx, int x, int y);
 
 void vncPreScreenResize(int scrIdx);
 void vncPostScreenResize(int scrIdx, int success, int width, int height);

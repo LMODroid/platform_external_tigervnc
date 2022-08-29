@@ -47,12 +47,6 @@ namespace rfb {
 
     void writeBytes(const void*, int);
 
-    inline rdr::U8* getstart() { return start; }
-
-    inline int overrun(int itemSize, int nItems) {
-      return MemOutStream::overrun(itemSize, nItems);
-    }
-
   private:
 
     struct jpeg_compress_struct *cinfo;

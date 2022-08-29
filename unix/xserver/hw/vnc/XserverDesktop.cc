@@ -21,6 +21,10 @@
 // XserverDesktop.cxx
 //
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 #include <signal.h>
 #include <stdio.h>
@@ -46,7 +50,7 @@
 #include "vncHooks.h"
 #include "vncSelection.h"
 #include "XorgGlue.h"
-#include "Input.h"
+#include "vncInput.h"
 
 extern "C" {
 void vncSetGlueContext(int screenIndex);
@@ -72,16 +76,16 @@ XserverDesktop::XserverDesktop(int screenIndex_,
                                std::list<network::SocketListener*> listeners_,
                                const char* name, const rfb::PixelFormat &pf,
                                int width, int height,
-                               void* fbptr, int stride)
+                               void* fbptr, int stride_)
   : screenIndex(screenIndex_),
     server(0), listeners(listeners_),
-    directFbptr(true),
+    shadowFramebuffer(NULL),
     queryConnectId(0), queryConnectTimer(this)
 {
   format = pf;
 
   server = new VNCServerST(name, this);
-  setFramebuffer(width, height, fbptr, stride);
+  setFramebuffer(width, height, fbptr, stride_);
 
   for (std::list<SocketListener*>::iterator i = listeners.begin();
        i != listeners.end();
@@ -97,8 +101,8 @@ XserverDesktop::~XserverDesktop()
     delete listeners.back();
     listeners.pop_back();
   }
-  if (!directFbptr)
-    delete [] data;
+  if (shadowFramebuffer)
+    delete [] shadowFramebuffer;
   delete server;
 }
 
@@ -116,22 +120,18 @@ void XserverDesktop::setFramebuffer(int w, int h, void* fbptr, int stride_)
 {
   ScreenSet layout;
 
-  width_ = w;
-  height_ = h;
-
-  if (!directFbptr) {
-    delete [] data;
-    directFbptr = true;
+  if (shadowFramebuffer) {
+    delete [] shadowFramebuffer;
+    shadowFramebuffer = NULL;
   }
 
   if (!fbptr) {
-    fbptr = new rdr::U8[w * h * (format.bpp/8)];
+    shadowFramebuffer = new rdr::U8[w * h * (format.bpp/8)];
+    fbptr = shadowFramebuffer;
     stride_ = w;
-    directFbptr = false;
   }
 
-  data = (rdr::U8*)fbptr;
-  stride = stride_;
+  setBuffer(w, h, (rdr::U8*)fbptr, stride_);
 
   vncSetGlueContext(screenIndex);
   layout = ::computeScreenLayout(&outputIdMap);
@@ -200,10 +200,10 @@ void XserverDesktop::announceClipboard(bool available)
   }
 }
 
-void XserverDesktop::sendClipboardData(const char* data)
+void XserverDesktop::sendClipboardData(const char* data_)
 {
   try {
-    server->sendClipboardData(data);
+    server->sendClipboardData(data_);
   } catch (rdr::Exception& e) {
     vlog.error("XserverDesktop::sendClipboardData: %s",e.str());
   }
@@ -265,6 +265,15 @@ void XserverDesktop::setCursor(int width, int height, int hotX, int hotY,
   delete [] cursorData;
 }
 
+void XserverDesktop::setCursorPos(int x, int y, bool warped)
+{
+  try {
+    server->setCursorPos(Point(x, y), warped);
+  } catch (rdr::Exception& e) {
+    vlog.error("XserverDesktop::setCursorPos: %s",e.str());
+  }
+}
+
 void XserverDesktop::add_changed(const rfb::Region &region)
 {
   try {
@@ -315,7 +324,6 @@ bool XserverDesktop::handleListenerEvent(int fd,
     return false;
 
   Socket* sock = (*i)->accept();
-  sock->outStream().setBlocking(false);
   vlog.debug("new client, sock %d", sock->getFd());
   sockserv->addSocket(sock);
   vncSetNotifyFd(sock->getFd(), screenIndex, true, false);
@@ -370,7 +378,7 @@ void XserverDesktop::blockHandler(int* timeout)
         delete (*i);
       } else {
         /* Update existing NotifyFD to listen for write (or not) */
-        vncSetNotifyFd(fd, screenIndex, true, (*i)->outStream().bufferUsage() > 0);
+        vncSetNotifyFd(fd, screenIndex, true, (*i)->outStream().hasBufferedData());
       }
     }
 
@@ -382,7 +390,7 @@ void XserverDesktop::blockHandler(int* timeout)
     if (oldCursorPos.x != cursorX || oldCursorPos.y != cursorY) {
       oldCursorPos.x = cursorX;
       oldCursorPos.y = cursorY;
-      server->setCursorPos(oldCursorPos);
+      server->setCursorPos(oldCursorPos, false);
     }
 
     // Trigger timers and check when the next will expire
@@ -397,7 +405,6 @@ void XserverDesktop::blockHandler(int* timeout)
 void XserverDesktop::addClient(Socket* sock, bool reverse)
 {
   vlog.debug("new client, sock %d reverse %d",sock->getFd(),reverse);
-  sock->outStream().setBlocking(false);
   server->addSocket(sock, reverse);
   vncSetNotifyFd(sock->getFd(), screenIndex, true, false);
 }
@@ -459,12 +466,6 @@ unsigned int XserverDesktop::setScreenLayout(int fb_width, int fb_height,
 {
   unsigned int result;
 
-  char buffer[2048];
-  vlog.debug("Got request for framebuffer resize to %dx%d",
-             fb_width, fb_height);
-  layout.print(buffer, sizeof(buffer));
-  vlog.debug("%s", buffer);
-
   vncSetGlueContext(screenIndex);
   result = ::setScreenLayout(fb_width, fb_height, layout, &outputIdMap);
 
@@ -492,7 +493,7 @@ void XserverDesktop::handleClipboardData(const char* data_)
 
 void XserverDesktop::grabRegion(const rfb::Region& region)
 {
-  if (directFbptr)
+  if (shadowFramebuffer == NULL)
     return;
 
   std::vector<rfb::Rect> rects;
@@ -500,11 +501,11 @@ void XserverDesktop::grabRegion(const rfb::Region& region)
   region.get_rects(&rects);
   for (i = rects.begin(); i != rects.end(); i++) {
     rdr::U8 *buffer;
-    int stride;
+    int bufStride;
 
-    buffer = getBufferRW(*i, &stride);
+    buffer = getBufferRW(*i, &bufStride);
     vncGetScreenImage(screenIndex, i->tl.x, i->tl.y, i->width(), i->height(),
-                      (char*)buffer, stride * format.bpp/8);
+                      (char*)buffer, bufStride * format.bpp/8);
     commitBufferRW(*i);
   }
 }

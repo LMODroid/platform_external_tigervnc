@@ -87,7 +87,7 @@ class ServerDialog extends Dialog implements Runnable {
       public void keyTyped(KeyEvent e) {}
       public void keyReleased(KeyEvent e) {}
       public void keyPressed(KeyEvent e) {
-        if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+        if (KeyMap.get_keycode_fallback_extended(e) == KeyEvent.VK_ENTER) {
           serverName.insertItemAt(editor.getItem(), 0);
           serverName.setSelectedIndex(0);
           handleConnect();
@@ -227,6 +227,9 @@ class ServerDialog extends Dialog implements Runnable {
   }
 
   private void handleOptions() {
+    // quirk for mac os x
+    if (VncViewer.os.startsWith("mac os x"))
+      this.setAlwaysOnTop(false);
     OptionsDialog.showDialog(this);
   }
 
@@ -278,6 +281,7 @@ class ServerDialog extends Dialog implements Runnable {
 
   private void handleConnect() {
     String servername = (String)serverName.getSelectedItem();
+    servername.trim();
     vncServerName.put(servername).flip();
     saveViewerParameters(null, servername);
     endDialog();

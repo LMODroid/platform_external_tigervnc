@@ -77,6 +77,9 @@ namespace rfb {
     const Cursor& cursor() const { return *cursor_; }
     void setCursor(const Cursor& cursor);
 
+    const Point& cursorPos() const { return cursorPos_; }
+    void setCursorPos(const Point& pos);
+
     bool supportsEncoding(rdr::S32 encoding) const;
 
     void setEncodings(int nEncodings, const rdr::S32* encodings);
@@ -85,11 +88,13 @@ namespace rfb {
     void setLEDState(unsigned int state);
 
     rdr::U32 clipboardFlags() const { return clipFlags; }
+    rdr::U32 clipboardSize(unsigned int format) const;
     void setClipboardCaps(rdr::U32 flags, const rdr::U32* lengths);
 
     // Wrappers to check for functionality rather than specific
     // encodings
     bool supportsLocalCursor() const;
+    bool supportsCursorPosition() const;
     bool supportsDesktopSize() const;
     bool supportsLEDState() const;
     bool supportsFence() const;
@@ -109,6 +114,7 @@ namespace rfb {
     PixelFormat pf_;
     char* name_;
     Cursor* cursor_;
+    Point cursorPos_;
     std::set<rdr::S32> encodings_;
     unsigned int ledState_;
     rdr::U32 clipFlags;

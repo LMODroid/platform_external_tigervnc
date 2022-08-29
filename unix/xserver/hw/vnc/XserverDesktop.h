@@ -36,7 +36,7 @@
 #include <rfb/Configuration.h>
 #include <rfb/Timer.h>
 #include <unixcommon.h>
-#include "Input.h"
+#include "vncInput.h"
 
 namespace rfb {
   class VNCServerST;
@@ -67,6 +67,7 @@ public:
   void setDesktopName(const char* name);
   void setCursor(int width, int height, int hotX, int hotY,
                  const unsigned char *rgbaData);
+  void setCursorPos(int x, int y, bool warped);
   void add_changed(const rfb::Region &region);
   void add_copied(const rfb::Region &dest, const rfb::Point &delta);
   void handleSocketEvent(int fd, bool read, bool write);
@@ -118,7 +119,7 @@ private:
   int screenIndex;
   rfb::VNCServer* server;
   std::list<network::SocketListener*> listeners;
-  bool directFbptr;
+  rdr::U8* shadowFramebuffer;
 
   uint32_t queryConnectId;
   network::Socket* queryConnectSocket;

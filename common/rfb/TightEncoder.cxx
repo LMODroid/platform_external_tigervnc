@@ -17,6 +17,11 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
  * USA.
  */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <assert.h>
 
 #include <rdr/OutStream.h>
@@ -244,6 +249,7 @@ rdr::OutStream* TightEncoder::getZlibOutStream(int streamId, int level, size_t l
 
   zlibStreams[streamId].setUnderlying(&memStream);
   zlibStreams[streamId].setCompressionLevel(level);
+  zlibStreams[streamId].cork(true);
 
   return &zlibStreams[streamId];
 }
@@ -257,6 +263,7 @@ void TightEncoder::flushZlibOutStream(rdr::OutStream* os_)
   if (zos == NULL)
     return;
 
+  zos->cork(false);
   zos->flush();
   zos->setUnderlying(NULL);
 

@@ -1,13 +1,15 @@
-include_directories(${CMAKE_SOURCE_DIR}/common ${ZLIB_INCLUDE_DIRS})
+include_directories(${CMAKE_SOURCE_DIR}/common)
+include_directories(${ZLIB_INCLUDE_DIRS})
 
 add_library(rdr STATIC
+  BufferedInStream.cxx
+  BufferedOutStream.cxx
   Exception.cxx
   FdInStream.cxx
   FdOutStream.cxx
   FileInStream.cxx
   HexInStream.cxx
   HexOutStream.cxx
-  InStream.cxx
   RandomStream.cxx
   TLSException.cxx
   TLSInStream.cxx
@@ -15,15 +17,15 @@ add_library(rdr STATIC
   ZlibInStream.cxx
   ZlibOutStream.cxx)
 
-set(RDR_LIBRARIES ${ZLIB_LIBRARIES} os)
+target_link_libraries(rdr ${ZLIB_LIBRARIES} os)
+
 if(GNUTLS_FOUND)
-  set(RDR_LIBRARIES ${RDR_LIBRARIES} ${GNUTLS_LIBRARIES})
+  include_directories(${GNUTLS_INCLUDE_DIR})
+  target_link_libraries(rdr ${GNUTLS_LIBRARIES})
 endif()
 if(WIN32)
-	set(RDR_LIBRARIES ${RDR_LIBRARIES} ws2_32)
+	target_link_libraries(rdr ws2_32)
 endif()
-
-target_link_libraries(rdr ${RDR_LIBRARIES})
 
 if(UNIX)
   libtool_create_control_file(rdr)

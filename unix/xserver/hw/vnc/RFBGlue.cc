@@ -17,6 +17,10 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <stdlib.h>
 
 #include <network/TcpSocket.h>
@@ -141,6 +145,22 @@ const char* vncGetParamDesc(const char *name)
     return NULL;
 
   return param->getDescription();
+}
+
+int vncIsParamBool(const char *name)
+{
+  VoidParameter *param;
+  BoolParameter *bparam;
+
+  param = rfb::Configuration::getParam(name);
+  if (param == NULL)
+    return false;
+
+  bparam = dynamic_cast<BoolParameter*>(param);
+  if (bparam == NULL)
+    return false;
+
+  return true;
 }
 
 int vncGetParamCount(void)

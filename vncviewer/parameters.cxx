@@ -44,10 +44,12 @@
 #include <string.h>
 #include <limits.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "i18n.h"
 
 using namespace rfb;
+using namespace std;
 
 static LogWriter vlog("Parameters");
 
@@ -55,6 +57,10 @@ static LogWriter vlog("Parameters");
 IntParameter pointerEventInterval("PointerEventInterval",
                                   "Time in milliseconds to rate-limit"
                                   " successive pointer events", 17);
+BoolParameter emulateMiddleButton("EmulateMiddleButton",
+                                  "Emulate middle mouse button by pressing "
+                                  "left and right mouse buttons simultaneously",
+                                  false);
 BoolParameter dotWhenNoCursor("DotWhenNoCursor",
                               "Show the dot cursor when the server sends an "
                               "invisible cursor", false);
@@ -62,6 +68,10 @@ BoolParameter dotWhenNoCursor("DotWhenNoCursor",
 BoolParameter alertOnFatalError("AlertOnFatalError",
                                 "Give a dialog on connection problems rather "
                                 "than exiting immediately", true);
+
+BoolParameter reconnectOnError("ReconnectOnError",
+                               "Give a dialog on connection problems rather "
+                               "than exiting immediately and ask for a reconnect.", true);
 
 StringParameter passwordFile("PasswordFile",
                              "Password file for VNC authentication", "");
@@ -76,8 +86,7 @@ BoolParameter fullColour("FullColor",
 AliasParameter fullColourAlias("FullColour", "Alias for FullColor", &fullColour);
 IntParameter lowColourLevel("LowColorLevel",
                             "Color level to use on slow connections. "
-                            "0 = Very Low (8 colors), 1 = Low (64 colors), "
-                            "2 = Medium (256 colors)", 2);
+                            "0 = Very Low, 1 = Low, 2 = Medium", 2);
 AliasParameter lowColourLevelAlias("LowColourLevel", "Alias for LowColorLevel", &lowColourLevel);
 StringParameter preferredEncoding("PreferredEncoding",
                                   "Preferred encoding to use (Tight, ZRLE, Hextile or"
@@ -86,7 +95,7 @@ BoolParameter customCompressLevel("CustomCompressLevel",
                                   "Use custom compression level. "
                                   "Default if CompressLevel is specified.", false);
 IntParameter compressLevel("CompressLevel",
-                           "Use specified compression level 0 = Low, 6 = High",
+                           "Use specified compression level 0 = Low, 9 = High",
                            2);
 BoolParameter noJpeg("NoJPEG",
                      "Disable lossy JPEG compression in Tight encoding.",
@@ -96,10 +105,17 @@ IntParameter qualityLevel("QualityLevel",
                           8);
 
 BoolParameter maximize("Maximize", "Maximize viewer window", false);
-BoolParameter fullScreen("FullScreen", "Full screen mode", false);
+BoolParameter fullScreen("FullScreen", "Enable full screen", false);
+StringParameter fullScreenMode("FullScreenMode", "Specify which monitors to use when in full screen. "
+                                                 "Should be either Current, Selected or All",
+                                                 "Current");
 BoolParameter fullScreenAllMonitors("FullScreenAllMonitors",
-                                    "Enable full screen over all monitors",
-                                    true);
+                                    "[DEPRECATED] Enable full screen over all monitors",
+                                    false);
+MonitorIndicesParameter fullScreenSelectedMonitors("FullScreenSelectedMonitors",
+                                         "Use the given list of monitors in full screen"
+                                         " when -FullScreenMode=Selected.",
+                                         "1");
 StringParameter desktopSize("DesktopSize",
                             "Reconfigure desktop size on the server on "
                             "connect (if possible)", "");
@@ -144,7 +160,7 @@ StringParameter menuKey("MenuKey", "The key which brings up the popup menu",
 
 BoolParameter fullscreenSystemKeys("FullscreenSystemKeys",
                                    "Pass special keys (like Alt+Tab) directly "
-                                   "to the server when in full screen mode.",
+                                   "to the server when in full-screen mode.",
                                    true);
 
 #ifndef WIN32
@@ -153,13 +169,21 @@ StringParameter via("via", "Gateway to tunnel via", "");
 
 static const char* IDENTIFIER_STRING = "TigerVNC Configuration file Version 1.0";
 
+/*
+ * We only save the sub set of parameters that can be modified from
+ * the graphical user interface
+ */
 static VoidParameter* parameterArray[] = {
+  /* Security */
 #ifdef HAVE_GNUTLS
   &CSecurityTLS::X509CA,
   &CSecurityTLS::X509CRL,
 #endif // HAVE_GNUTLS
   &SecurityClient::secTypes,
-  &dotWhenNoCursor,
+  /* Misc. */
+  &reconnectOnError,
+  &shared,
+  /* Compression */
   &autoSelect,
   &fullColour,
   &lowColourLevel,
@@ -168,12 +192,14 @@ static VoidParameter* parameterArray[] = {
   &compressLevel,
   &noJpeg,
   &qualityLevel,
+  /* Display */
   &fullScreen,
-  &fullScreenAllMonitors,
-  &desktopSize,
-  &remoteResize,
+  &fullScreenMode,
+  &fullScreenSelectedMonitors,
+  /* Input */
   &viewOnly,
-  &shared,
+  &emulateMiddleButton,
+  &dotWhenNoCursor,
   &acceptClipboard,
   &sendClipboard,
 #if !defined(WIN32) && !defined(__APPLE__)
@@ -182,6 +208,10 @@ static VoidParameter* parameterArray[] = {
 #endif
   &menuKey,
   &fullscreenSystemKeys
+};
+
+static VoidParameter* readOnlyParameterArray[] = {
+  &fullScreenAllMonitors
 };
 
 // Encoding Table
@@ -274,30 +304,21 @@ static void setKeyString(const char *_name, const char *_value, HKEY* hKey) {
 
   wchar_t name[buffersize];
   unsigned size = fl_utf8towc(_name, strlen(_name)+1, name, buffersize);
-  if (size >= buffersize) {
-    vlog.error(_("The name of the parameter %s was too large to write to the registry"), _name);
-    return;
-  }
+  if (size >= buffersize)
+    throw Exception(_("The name of the parameter is too large"));
 
   char encodingBuffer[buffersize];
-  if (!encodeValue(_value, encodingBuffer, buffersize)) {
-    vlog.error(_("The parameter %s was too large to write to the registry"), _name);
-    return;
-  }
+  if (!encodeValue(_value, encodingBuffer, buffersize))
+    throw Exception(_("The parameter is too large"));
 
   wchar_t value[buffersize];
   size = fl_utf8towc(encodingBuffer, strlen(encodingBuffer)+1, value, buffersize);
-  if (size >= buffersize) {
-    vlog.error(_("The parameter %s was too large to write to the registry"), _name);
-    return;
-  }
+  if (size >= buffersize)
+    throw Exception(_("The parameter is too large"));
 
   LONG res = RegSetValueExW(*hKey, name, 0, REG_SZ, (BYTE*)&value, (wcslen(value)+1)*2);
-  if (res != ERROR_SUCCESS) {
-    vlog.error(_("Failed to write parameter %s of type %s to the registry: %ld"),
-               _name, "REG_SZ", res);
-    return;
-  }
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException("RegSetValueExW", res);
 }
 
 
@@ -308,17 +329,12 @@ static void setKeyInt(const char *_name, const int _value, HKEY* hKey) {
   DWORD value = _value;
 
   unsigned size = fl_utf8towc(_name, strlen(_name)+1, name, buffersize);
-  if (size >= buffersize) {
-    vlog.error(_("The name of the parameter %s was too large to write to the registry"), _name);
-    return;
-  }
-  
+  if (size >= buffersize)
+    throw Exception(_("The name of the parameter is too large"));
+
   LONG res = RegSetValueExW(*hKey, name, 0, REG_DWORD, (BYTE*)&value, sizeof(DWORD));
-  if (res != ERROR_SUCCESS) {
-    vlog.error(_("Failed to write parameter %s of type %s to the registry: %ld"),
-               _name, "REG_DWORD", res);
-    return;
-  }
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException("RegSetValueExW", res);
 }
 
 
@@ -330,38 +346,35 @@ static bool getKeyString(const char* _name, char* dest, size_t destSize, HKEY* h
   DWORD valuesize;
 
   unsigned size = fl_utf8towc(_name, strlen(_name)+1, name, buffersize);
-  if (size >= buffersize) {
-    vlog.error(_("The name of the parameter %s was too large to read from the registry"), _name);
-    return false;
-  }
+  if (size >= buffersize)
+    throw Exception(_("The name of the parameter is too large"));
 
   value = new WCHAR[destSize];
   valuesize = destSize;
   LONG res = RegQueryValueExW(*hKey, name, 0, NULL, (LPBYTE)value, &valuesize);
   if (res != ERROR_SUCCESS){
     delete [] value;
-    if (res == ERROR_FILE_NOT_FOUND) {
-      // The value does not exist, defaults will be used.
-    } else {
-      vlog.error(_("Failed to read parameter %s from the registry: %ld"),
-                 _name, res);
-    }
+    if (res != ERROR_FILE_NOT_FOUND)
+      throw rdr::SystemException("RegQueryValueExW", res);
+    // The value does not exist, defaults will be used.
     return false;
   }
-  
+
   char* utf8val = new char[destSize];
   size = fl_utf8fromwc(utf8val, destSize, value, wcslen(value)+1);
   delete [] value;
   if (size >= destSize) {
     delete [] utf8val;
-    vlog.error(_("The parameter %s was too large to read from the registry"), _name);
-    return false;
+    throw Exception(_("The parameter is too large"));
   }
-  
+
   bool ret = decodeValue(utf8val, dest, destSize);
   delete [] utf8val;
 
-  return ret;
+  if (!ret)
+    throw Exception(_("Invalid format or too large value"));
+
+  return true;
 }
 
 
@@ -373,19 +386,14 @@ static bool getKeyInt(const char* _name, int* dest, HKEY* hKey) {
   wchar_t name[buffersize];
 
   unsigned size = fl_utf8towc(_name, strlen(_name)+1, name, buffersize);
-  if (size >= buffersize) {
-    vlog.error(_("The name of the parameter %s was too large to read from the registry"), _name);
-    return false;
-  }
+  if (size >= buffersize)
+    throw Exception(_("The name of the parameter is too large"));
 
   LONG res = RegQueryValueExW(*hKey, name, 0, NULL, (LPBYTE)&value, &dwordsize);
   if (res != ERROR_SUCCESS){
-    if (res == ERROR_FILE_NOT_FOUND) {
-      // The value does not exist, defaults will be used.
-    } else {
-      vlog.error(_("Failed to read parameter %s from the registry: %ld"),
-                 _name, res);
-    }
+    if (res != ERROR_FILE_NOT_FOUND)
+      throw rdr::SystemException("RegQueryValueExW", res);
+    // The value does not exist, defaults will be used.
     return false;
   }
 
@@ -393,6 +401,52 @@ static bool getKeyInt(const char* _name, int* dest, HKEY* hKey) {
   return true;
 }
 
+static void removeValue(const char* _name, HKEY* hKey) {
+  const DWORD buffersize = 256;
+  wchar_t name[buffersize];
+
+  unsigned size = fl_utf8towc(_name, strlen(_name)+1, name, buffersize);
+  if (size >= buffersize)
+    throw Exception(_("The name of the parameter is too large"));
+
+  LONG res = RegDeleteValueW(*hKey, name);
+  if (res != ERROR_SUCCESS) {
+    if (res != ERROR_FILE_NOT_FOUND)
+      throw rdr::SystemException("RegDeleteValueW", res);
+    // The value does not exist, no need to remove it.
+    return;
+  }
+}
+
+void saveHistoryToRegKey(const vector<string>& serverHistory) {
+  HKEY hKey;
+  LONG res = RegCreateKeyExW(HKEY_CURRENT_USER,
+                             L"Software\\TigerVNC\\vncviewer\\history", 0, NULL,
+                             REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL,
+                             &hKey, NULL);
+
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to create registry key"), res);
+
+  size_t index = 0;
+  assert(SERVER_HISTORY_SIZE < 100);
+  char indexString[3];
+
+  try {
+    while(index < serverHistory.size() && index <= SERVER_HISTORY_SIZE) {
+      snprintf(indexString, 3, "%d", index);
+      setKeyString(indexString, serverHistory[index].c_str(), &hKey);
+      index++;
+    }
+  } catch (Exception& e) {
+    RegCloseKey(hKey);
+    throw;
+  }
+
+  res = RegCloseKey(hKey);
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to close registry key"), res);
+}
 
 static void saveToReg(const char* servername) {
   
@@ -402,32 +456,123 @@ static void saveToReg(const char* servername) {
                              L"Software\\TigerVNC\\vncviewer", 0, NULL,
                              REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL,
                              &hKey, NULL);
-  if (res != ERROR_SUCCESS) {
-    vlog.error(_("Failed to create registry key: %ld"), res);
-    return;
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to create registry key"), res);
+
+  try {
+    setKeyString("ServerName", servername, &hKey);
+  } catch (Exception& e) {
+    RegCloseKey(hKey);
+    throw Exception(_("Failed to save \"%s\": %s"),
+                    "ServerName", e.str());
   }
 
-  setKeyString("ServerName", servername, &hKey);
-
   for (size_t i = 0; i < sizeof(parameterArray)/sizeof(VoidParameter*); i++) {
-    if (dynamic_cast<StringParameter*>(parameterArray[i]) != NULL) {
-      setKeyString(parameterArray[i]->getName(), *(StringParameter*)parameterArray[i], &hKey);
-    } else if (dynamic_cast<IntParameter*>(parameterArray[i]) != NULL) {
-      setKeyInt(parameterArray[i]->getName(), (int)*(IntParameter*)parameterArray[i], &hKey);
-    } else if (dynamic_cast<BoolParameter*>(parameterArray[i]) != NULL) {
-      setKeyInt(parameterArray[i]->getName(), (int)*(BoolParameter*)parameterArray[i], &hKey);
-    } else {      
-      vlog.error(_("Unknown parameter type for parameter %s"),
-                 parameterArray[i]->getName());
+    try {
+      if (dynamic_cast<StringParameter*>(parameterArray[i]) != NULL) {
+        setKeyString(parameterArray[i]->getName(), *(StringParameter*)parameterArray[i], &hKey);
+      } else if (dynamic_cast<IntParameter*>(parameterArray[i]) != NULL) {
+        setKeyInt(parameterArray[i]->getName(), (int)*(IntParameter*)parameterArray[i], &hKey);
+      } else if (dynamic_cast<BoolParameter*>(parameterArray[i]) != NULL) {
+        setKeyInt(parameterArray[i]->getName(), (int)*(BoolParameter*)parameterArray[i], &hKey);
+      } else {
+        throw Exception(_("Unknown parameter type"));
+      }
+    } catch (Exception& e) {
+      RegCloseKey(hKey);
+      throw Exception(_("Failed to save \"%s\": %s"),
+                      parameterArray[i]->getName(), e.str());
+    }
+  }
+
+  // Remove read-only parameters to replicate the behaviour of Linux/macOS when they
+  // store a config to disk. If the parameter hasn't been migrated at this point it
+  // will be lost.
+  for (size_t i = 0; i < sizeof(readOnlyParameterArray)/sizeof(VoidParameter*); i++) {
+    try {
+      removeValue(readOnlyParameterArray[i]->getName(), &hKey);
+    } catch (Exception& e) {
+      RegCloseKey(hKey);
+      throw Exception(_("Failed to remove \"%s\": %s"),
+                      readOnlyParameterArray[i]->getName(), e.str());
     }
   }
 
   res = RegCloseKey(hKey);
-  if (res != ERROR_SUCCESS) {
-    vlog.error(_("Failed to close registry key: %ld"), res);
-  }
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to close registry key"), res);
 }
 
+void loadHistoryFromRegKey(vector<string>& serverHistory) {
+  HKEY hKey;
+
+  LONG res = RegOpenKeyExW(HKEY_CURRENT_USER,
+                           L"Software\\TigerVNC\\vncviewer\\history", 0,
+                           KEY_READ, &hKey);
+  if (res != ERROR_SUCCESS) {
+    if (res == ERROR_FILE_NOT_FOUND) {
+      // The key does not exist, defaults will be used.
+      return;
+    }
+
+    throw rdr::SystemException(_("Failed to open registry key"), res);
+  }
+
+  size_t index;
+  const DWORD buffersize = 256;
+  char indexString[3];
+
+  for (index = 0;;index++) {
+    snprintf(indexString, 3, "%d", index);
+    char servernameBuffer[buffersize];
+
+    try {
+      if (!getKeyString(indexString, servernameBuffer,
+                        buffersize, &hKey))
+        break;
+    } catch (Exception& e) {
+      // Just ignore this entry and try the next one
+      vlog.error(_("Failed to read server history entry %d: %s"),
+                 (int)index, e.str());
+      continue;
+    }
+
+    serverHistory.push_back(servernameBuffer);
+  }
+
+  res = RegCloseKey(hKey);
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to close registry key"), res);
+}
+
+static void getParametersFromReg(VoidParameter* parameters[],
+                                 size_t parameters_len, HKEY* hKey)
+{
+  const size_t buffersize = 256;
+  int intValue = 0;
+  char stringValue[buffersize];
+
+  for (size_t i = 0; i < parameters_len/sizeof(VoidParameter*); i++) {
+    try {
+      if (dynamic_cast<StringParameter*>(parameters[i]) != NULL) {
+        if (getKeyString(parameters[i]->getName(), stringValue, buffersize, hKey))
+          parameters[i]->setParam(stringValue);
+      } else if (dynamic_cast<IntParameter*>(parameters[i]) != NULL) {
+        if (getKeyInt(parameters[i]->getName(), &intValue, hKey))
+          ((IntParameter*)parameters[i])->setParam(intValue);
+      } else if (dynamic_cast<BoolParameter*>(parameters[i]) != NULL) {
+        if (getKeyInt(parameters[i]->getName(), &intValue, hKey))
+          ((BoolParameter*)parameters[i])->setParam(intValue);
+      } else {
+        throw Exception(_("Unknown parameter type"));
+      }
+    } catch(Exception& e) {
+      // Just ignore this entry and continue with the rest
+      vlog.error(_("Failed to read parameter \"%s\": %s"),
+                 parameters[i]->getName(), e.str());
+    }
+  }
+}
 
 static char* loadFromReg() {
 
@@ -439,43 +584,33 @@ static char* loadFromReg() {
   if (res != ERROR_SUCCESS) {
     if (res == ERROR_FILE_NOT_FOUND) {
       // The key does not exist, defaults will be used.
-    } else {
-      vlog.error(_("Failed to open registry key: %ld"), res);
+      return NULL;
     }
-    return NULL;
+
+    throw rdr::SystemException(_("Failed to open registry key"), res);
   }
 
   const size_t buffersize = 256;
   static char servername[buffersize];
 
   char servernameBuffer[buffersize];
-  if (getKeyString("ServerName", servernameBuffer, buffersize, &hKey))
-    snprintf(servername, buffersize, "%s", servernameBuffer);
-  
-  int intValue = 0;
-  char stringValue[buffersize];
-  
-  for (size_t i = 0; i < sizeof(parameterArray)/sizeof(VoidParameter*); i++) {
-    if (dynamic_cast<StringParameter*>(parameterArray[i]) != NULL) {
-      if (getKeyString(parameterArray[i]->getName(), stringValue, buffersize, &hKey))
-        parameterArray[i]->setParam(stringValue);
-    } else if (dynamic_cast<IntParameter*>(parameterArray[i]) != NULL) {
-      if (getKeyInt(parameterArray[i]->getName(), &intValue, &hKey))
-        ((IntParameter*)parameterArray[i])->setParam(intValue);
-    } else if (dynamic_cast<BoolParameter*>(parameterArray[i]) != NULL) {
-      if (getKeyInt(parameterArray[i]->getName(), &intValue, &hKey))
-        ((BoolParameter*)parameterArray[i])->setParam(intValue);
-    } else {      
-      vlog.error(_("Unknown parameter type for parameter %s"),
-                 parameterArray[i]->getName());
-    }
+  try {
+    if (getKeyString("ServerName", servernameBuffer, buffersize, &hKey))
+      snprintf(servername, buffersize, "%s", servernameBuffer);
+  } catch(Exception& e) {
+    vlog.error(_("Failed to read parameter \"%s\": %s"),
+               "ServerName", e.str());
+    strcpy(servername, "");
   }
 
+  getParametersFromReg(parameterArray, sizeof(parameterArray), &hKey);
+  getParametersFromReg(readOnlyParameterArray,
+                       sizeof(readOnlyParameterArray), &hKey);
+
   res = RegCloseKey(hKey);
-  if (res != ERROR_SUCCESS){
-    vlog.error(_("Failed to close registry key: %ld"), res);
-  }
-  
+  if (res != ERROR_SUCCESS)
+    throw rdr::SystemException(_("Failed to close registry key"), res);
+
   return servername;
 }
 #endif // _WIN32
@@ -496,11 +631,8 @@ void saveViewerParameters(const char *filename, const char *servername) {
 #endif
     
     char* homeDir = NULL;
-    if (getvnchomedir(&homeDir) == -1) {
-      vlog.error(_("Failed to write configuration file, can't obtain home "
-                   "directory path."));
-      return;
-    }
+    if (getvnchomedir(&homeDir) == -1)
+      throw Exception(_("Could not obtain the home directory path"));
 
     snprintf(filepath, sizeof(filepath), "%sdefault.tigervnc", homeDir);
     delete[] homeDir;
@@ -511,31 +643,80 @@ void saveViewerParameters(const char *filename, const char *servername) {
   /* Write parameters to file */
   FILE* f = fopen(filepath, "w+");
   if (!f)
-    throw Exception(_("Failed to write configuration file, can't open %s: %s"),
+    throw Exception(_("Could not open \"%s\": %s"),
                     filepath, strerror(errno));
-  
-  fprintf(f, "%s\r\n", IDENTIFIER_STRING);
-  fprintf(f, "\r\n");
 
-  if (encodeValue(servername, encodingBuffer, buffersize))  
-    fprintf(f, "ServerName=%s\n", encodingBuffer);
-  
+  fprintf(f, "%s\n", IDENTIFIER_STRING);
+  fprintf(f, "\n");
+
+  if (!encodeValue(servername, encodingBuffer, buffersize)) {
+    fclose(f);
+    throw Exception(_("Failed to save \"%s\": %s"),
+                    "ServerName", _("Could not encode parameter"));
+  }
+  fprintf(f, "ServerName=%s\n", encodingBuffer);
+
   for (size_t i = 0; i < sizeof(parameterArray)/sizeof(VoidParameter*); i++) {
     if (dynamic_cast<StringParameter*>(parameterArray[i]) != NULL) {
-      if (encodeValue(*(StringParameter*)parameterArray[i], encodingBuffer, buffersize))
-        fprintf(f, "%s=%s\n", ((StringParameter*)parameterArray[i])->getName(), encodingBuffer);
+      if (!encodeValue(*(StringParameter*)parameterArray[i],
+          encodingBuffer, buffersize)) {
+        fclose(f);
+        throw Exception(_("Failed to save \"%s\": %s"),
+                        parameterArray[i]->getName(),
+                        _("Could not encode parameter"));
+      }
+      fprintf(f, "%s=%s\n", ((StringParameter*)parameterArray[i])->getName(), encodingBuffer);
     } else if (dynamic_cast<IntParameter*>(parameterArray[i]) != NULL) {
       fprintf(f, "%s=%d\n", ((IntParameter*)parameterArray[i])->getName(), (int)*(IntParameter*)parameterArray[i]);
     } else if (dynamic_cast<BoolParameter*>(parameterArray[i]) != NULL) {
       fprintf(f, "%s=%d\n", ((BoolParameter*)parameterArray[i])->getName(), (int)*(BoolParameter*)parameterArray[i]);
     } else {      
-      vlog.error(_("Unknown parameter type for parameter %s"),
-                 parameterArray[i]->getName());
+      fclose(f);
+      throw Exception(_("Failed to save \"%s\": %s"),
+                      parameterArray[i]->getName(),
+                      _("Unknown parameter type"));
     }
   }
   fclose(f);
 }
 
+static bool findAndSetViewerParameterFromValue(
+  VoidParameter* parameters[], size_t parameters_len,
+  char* value, char* line, char* filepath)
+{
+  const size_t buffersize = 256;
+  char decodingBuffer[buffersize];
+
+  // Find and set the correct parameter
+  for (size_t i = 0; i < parameters_len/sizeof(VoidParameter*); i++) {
+
+    if (dynamic_cast<StringParameter*>(parameters[i]) != NULL) {
+      if (strcasecmp(line, ((StringParameter*)parameters[i])->getName()) == 0) {
+        if(!decodeValue(value, decodingBuffer, sizeof(decodingBuffer)))
+          throw Exception(_("Invalid format or too large value"));
+        ((StringParameter*)parameters[i])->setParam(decodingBuffer);
+        return false;
+      }
+
+    } else if (dynamic_cast<IntParameter*>(parameters[i]) != NULL) {
+      if (strcasecmp(line, ((IntParameter*)parameters[i])->getName()) == 0) {
+        ((IntParameter*)parameters[i])->setParam(atoi(value));
+        return false;
+      }
+
+    } else if (dynamic_cast<BoolParameter*>(parameters[i]) != NULL) {
+      if (strcasecmp(line, ((BoolParameter*)parameters[i])->getName()) == 0) {
+        ((BoolParameter*)parameters[i])->setParam(atoi(value));
+        return false;
+      }
+
+    } else {
+      throw Exception(_("Unknown parameter type"));
+    }
+  }
+
+  return true;
+}
 
 char* loadViewerParameters(const char *filename) {
 
@@ -556,8 +737,7 @@ char* loadViewerParameters(const char *filename) {
 
     char* homeDir = NULL;
     if (getvnchomedir(&homeDir) == -1)
-      throw Exception(_("Failed to read configuration file, "
-                        "can't obtain home directory path."));
+      throw Exception(_("Could not obtain the home directory path"));
 
     snprintf(filepath, sizeof(filepath), "%sdefault.tigervnc", homeDir);
     delete[] homeDir;
@@ -570,7 +750,7 @@ char* loadViewerParameters(const char *filename) {
   if (!f) {
     if (!filename)
       return NULL; // Use defaults.
-    throw Exception(_("Failed to read configuration file, can't open %s: %s"),
+    throw Exception(_("Could not open \"%s\": %s"),
                     filepath, strerror(errno));
   }
   
@@ -583,21 +763,25 @@ char* loadViewerParameters(const char *filename) {
       if (feof(f))
         break;
 
+      fclose(f);
       throw Exception(_("Failed to read line %d in file %s: %s"),
                       lineNr, filepath, strerror(errno));
     }
 
-    if (strlen(line) == (sizeof(line) - 1))
+    if (strlen(line) == (sizeof(line) - 1)) {
+      fclose(f);
       throw Exception(_("Failed to read line %d in file %s: %s"),
                       lineNr, filepath, _("Line too long"));
-    
+    }
+
     // Make sure that the first line of the file has the file identifier string
     if(lineNr == 1) {
       if(strncmp(line, IDENTIFIER_STRING, strlen(IDENTIFIER_STRING)) == 0)
         continue;
-      else
-        throw Exception(_("Configuration file %s is in an invalid format"),
-                        filepath);
+
+      fclose(f);
+      throw Exception(_("Configuration file %s is in an invalid format"),
+                      filepath);
     }
     
     // Skip empty lines and comments
@@ -606,6 +790,10 @@ char* loadViewerParameters(const char *filename) {
 
     int len = strlen(line);
     if (line[len-1] == '\n') {
+      line[len-1] = '\0';
+      len--;
+    }
+    if (line[len-1] == '\r') {
       line[len-1] = '\0';
       len--;
     }
@@ -623,55 +811,33 @@ char* loadViewerParameters(const char *filename) {
     bool invalidParameterName = true; // Will be set to false below if 
                                       // the line contains a valid name.
 
-    if (strcasecmp(line, "ServerName") == 0) {
+    try {
+      if (strcasecmp(line, "ServerName") == 0) {
 
-      if(!decodeValue(value, decodingBuffer, sizeof(decodingBuffer))) {
-        vlog.error(_("Failed to read line %d in file %s: %s"),
-                   lineNr, filepath, _("Invalid format or too large value"));
-        continue;
-      }
-      snprintf(servername, sizeof(decodingBuffer), "%s", decodingBuffer);
-      invalidParameterName = false;
+        if(!decodeValue(value, decodingBuffer, sizeof(decodingBuffer)))
+          throw Exception(_("Invalid format or too large value"));
+        snprintf(servername, sizeof(decodingBuffer), "%s", decodingBuffer);
+        invalidParameterName = false;
 
-    } else {
-    
-      // Find and set the correct parameter
-      for (size_t i = 0; i < sizeof(parameterArray)/sizeof(VoidParameter*); i++) {
+      } else {
+        invalidParameterName = findAndSetViewerParameterFromValue(parameterArray, sizeof(parameterArray),
+                                                                  value, line, filepath);
 
-        if (dynamic_cast<StringParameter*>(parameterArray[i]) != NULL) {
-          if (strcasecmp(line, ((StringParameter*)parameterArray[i])->getName()) == 0) {
-
-            if(!decodeValue(value, decodingBuffer, sizeof(decodingBuffer))) {
-              vlog.error(_("Failed to read line %d in file %s: %s"),
-                         lineNr, filepath, _("Invalid format or too large value"));
-              continue;
-            }
-            ((StringParameter*)parameterArray[i])->setParam(decodingBuffer);
-            invalidParameterName = false;
-          }
-
-        } else if (dynamic_cast<IntParameter*>(parameterArray[i]) != NULL) {
-          if (strcasecmp(line, ((IntParameter*)parameterArray[i])->getName()) == 0) {
-            ((IntParameter*)parameterArray[i])->setParam(atoi(value));
-            invalidParameterName = false;
-          }
-
-        } else if (dynamic_cast<BoolParameter*>(parameterArray[i]) != NULL) {
-          if (strcasecmp(line, ((BoolParameter*)parameterArray[i])->getName()) == 0) {
-            ((BoolParameter*)parameterArray[i])->setParam(atoi(value));
-            invalidParameterName = false;
-          }
-
-        } else {
-          vlog.error(_("Unknown parameter type for parameter %s"),
-                     parameterArray[i]->getName());
+        if (invalidParameterName) {
+          invalidParameterName = findAndSetViewerParameterFromValue(readOnlyParameterArray, sizeof(readOnlyParameterArray),
+                                                                    value, line, filepath);
         }
       }
+    } catch(Exception& e) {
+      // Just ignore this entry and continue with the rest
+      vlog.error(_("Failed to read line %d in file %s: %s"),
+                 lineNr, filepath, e.str());
+      continue;
     }
 
     if (invalidParameterName)
-      vlog.info(_("Unknown parameter %s on line %d in file %s"),
-                line, lineNr, filepath);
+      vlog.error(_("Failed to read line %d in file %s: %s"),
+                 lineNr, filepath, _("Unknown parameter"));
   }
   fclose(f); f=0;
   

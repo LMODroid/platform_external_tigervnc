@@ -69,7 +69,7 @@ UnixSocket::UnixSocket(const char *path)
   }
 
   if (result == -1)
-    throw SocketException("unable connect to socket", err);
+    throw SocketException("unable to connect to socket", err);
 
   setFd(sock);
 }
@@ -107,11 +107,6 @@ char* UnixSocket::getPeerAddress() {
 
 char* UnixSocket::getPeerEndpoint() {
   return getPeerAddress();
-}
-
-bool UnixSocket::cork(bool enable)
-{
-  return true;
 }
 
 UnixListener::UnixListener(const char *path, int mode)

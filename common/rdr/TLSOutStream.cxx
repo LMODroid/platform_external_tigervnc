@@ -1,6 +1,7 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
  * Copyright (C) 2005 Martin Koegler
  * Copyright (C) 2010 TigerVNC Team
+ * Copyright (C) 2012-2021 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,12 +26,13 @@
 #include <rdr/Exception.h>
 #include <rdr/TLSException.h>
 #include <rdr/TLSOutStream.h>
+#include <rfb/LogWriter.h>
 #include <errno.h>
 
 #ifdef HAVE_GNUTLS
 using namespace rdr;
 
-enum { DEFAULT_BUF_SIZE = 16384 };
+static rfb::LogWriter vlog("TLSOutStream");
 
 ssize_t TLSOutStream::push(gnutls_transport_ptr_t str, const void* data,
 				   size_t size)
@@ -38,11 +40,21 @@ ssize_t TLSOutStream::push(gnutls_transport_ptr_t str, const void* data,
   TLSOutStream* self= (TLSOutStream*) str;
   OutStream *out = self->out;
 
+  delete self->saved_exception;
+  self->saved_exception = NULL;
+
   try {
     out->writeBytes(data, size);
     out->flush();
+  } catch (SystemException &e) {
+    vlog.error("Failure sending TLS data: %s", e.str());
+    gnutls_transport_set_errno(self->session, e.err);
+    self->saved_exception = new SystemException(e);
+    return -1;
   } catch (Exception& e) {
+    vlog.error("Failure sending TLS data: %s", e.str());
     gnutls_transport_set_errno(self->session, EINVAL);
+    self->saved_exception = new Exception(e);
     return -1;
   }
 
@@ -50,12 +62,9 @@ ssize_t TLSOutStream::push(gnutls_transport_ptr_t str, const void* data,
 }
 
 TLSOutStream::TLSOutStream(OutStream* _out, gnutls_session_t _session)
-  : session(_session), out(_out), bufSize(DEFAULT_BUF_SIZE), offset(0)
+  : session(_session), out(_out), saved_exception(NULL)
 {
   gnutls_transport_ptr_t recv, send;
-
-  ptr = start = new U8[bufSize];
-  end = start + bufSize;
 
   gnutls_transport_set_push_function(session, push);
   gnutls_transport_get_ptr2(session, &recv, &send);
@@ -72,47 +81,41 @@ TLSOutStream::~TLSOutStream()
 #endif
   gnutls_transport_set_push_function(session, NULL);
 
-  delete [] start;
-}
-
-int TLSOutStream::length()
-{
-  return offset + ptr - start;
+  delete saved_exception;
 }
 
 void TLSOutStream::flush()
 {
-  U8* sentUpTo = start;
-  while (sentUpTo < ptr) {
-    int n = writeTLS(sentUpTo, ptr - sentUpTo);
-    sentUpTo += n;
-    offset += n;
-  }
-
-  ptr = start;
+  BufferedOutStream::flush();
   out->flush();
 }
 
-int TLSOutStream::overrun(int itemSize, int nItems)
+void TLSOutStream::cork(bool enable)
 {
-  if (itemSize > bufSize)
-    throw Exception("TLSOutStream overrun: max itemSize exceeded");
-
-  flush();
-
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
-
-  return nItems;
+  BufferedOutStream::cork(enable);
+  out->cork(enable);
 }
 
-int TLSOutStream::writeTLS(const U8* data, int length)
+bool TLSOutStream::flushBuffer()
+{
+  while (sentUpTo < ptr) {
+    size_t n = writeTLS(sentUpTo, ptr - sentUpTo);
+    sentUpTo += n;
+  }
+
+  return true;
+}
+
+size_t TLSOutStream::writeTLS(const U8* data, size_t length)
 {
   int n;
 
   n = gnutls_record_send(session, data, length);
   if (n == GNUTLS_E_INTERRUPTED || n == GNUTLS_E_AGAIN)
     return 0;
+
+  if (n == GNUTLS_E_PUSH_ERROR)
+    throw *saved_exception;
 
   if (n < 0)
     throw TLSException("writeTLS", n);

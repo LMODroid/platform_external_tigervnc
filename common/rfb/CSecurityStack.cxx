@@ -17,13 +17,17 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb/CSecurityStack.h>
 
 using namespace rfb;
 
-CSecurityStack::CSecurityStack(CConnection* cc, int Type, const char* Name,
+CSecurityStack::CSecurityStack(CConnection* cc, int Type,
                                CSecurity* s0, CSecurity* s1)
-  : CSecurity(cc), name(Name), type(Type)
+  : CSecurity(cc), type(Type)
 {
   state = 0;
   state0 = s0;
@@ -32,10 +36,8 @@ CSecurityStack::CSecurityStack(CConnection* cc, int Type, const char* Name,
 
 CSecurityStack::~CSecurityStack()
 {
-  if (state0)
-    delete state0;
-  if (state1)
-    delete state1;
+  delete state0;
+  delete state1;
 }
 
 bool CSecurityStack::processMsg()

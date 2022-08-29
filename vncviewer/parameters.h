@@ -21,8 +21,18 @@
 #define __PARAMETERS_H__
 
 #include <rfb/Configuration.h>
+#include "MonitorIndicesParameter.h"
+
+#ifdef _WIN32
+#include <vector>
+#include <string>
+#endif
+
+#define SERVER_HISTORY_SIZE 20
+
 
 extern rfb::IntParameter pointerEventInterval;
+extern rfb::BoolParameter emulateMiddleButton;
 extern rfb::BoolParameter dotWhenNoCursor;
 
 extern rfb::StringParameter passwordFile;
@@ -40,7 +50,9 @@ extern rfb::IntParameter qualityLevel;
 
 extern rfb::BoolParameter maximize;
 extern rfb::BoolParameter fullScreen;
-extern rfb::BoolParameter fullScreenAllMonitors;
+extern rfb::StringParameter fullScreenMode;
+extern rfb::BoolParameter fullScreenAllMonitors; // deprecated
+extern MonitorIndicesParameter fullScreenSelectedMonitors;
 extern rfb::StringParameter desktopSize;
 extern rfb::StringParameter geometry;
 extern rfb::BoolParameter remoteResize;
@@ -62,6 +74,7 @@ extern rfb::StringParameter menuKey;
 
 extern rfb::BoolParameter fullscreenSystemKeys;
 extern rfb::BoolParameter alertOnFatalError;
+extern rfb::BoolParameter reconnectOnError;
 
 #ifndef WIN32
 extern rfb::StringParameter via;
@@ -69,5 +82,10 @@ extern rfb::StringParameter via;
 
 void saveViewerParameters(const char *filename, const char *servername=NULL);
 char* loadViewerParameters(const char *filename);
+
+#ifdef _WIN32
+void loadHistoryFromRegKey(std::vector<std::string>& serverHistory);
+void saveHistoryToRegKey(const std::vector<std::string>& serverHistory);
+#endif
 
 #endif

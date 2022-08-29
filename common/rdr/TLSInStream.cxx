@@ -1,6 +1,7 @@
 /* Copyright (C) 2002-2005 RealVNC Ltd.  All Rights Reserved.
  * Copyright (C) 2005 Martin Koegler
  * Copyright (C) 2010 TigerVNC Team
+ * Copyright (C) 2012-2021 Pierre Ossman for Cendio AB
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,31 +26,45 @@
 #include <rdr/Exception.h>
 #include <rdr/TLSException.h>
 #include <rdr/TLSInStream.h>
+#include <rfb/LogWriter.h>
 #include <errno.h>
 
 #ifdef HAVE_GNUTLS 
 using namespace rdr;
 
-enum { DEFAULT_BUF_SIZE = 16384 };
+static rfb::LogWriter vlog("TLSInStream");
 
 ssize_t TLSInStream::pull(gnutls_transport_ptr_t str, void* data, size_t size)
 {
   TLSInStream* self= (TLSInStream*) str;
   InStream *in = self->in;
 
+  self->streamEmpty = false;
+  delete self->saved_exception;
+  self->saved_exception = NULL;
+
   try {
-    if (!in->check(1, 1, false)) {
+    if (!in->hasData(1)) {
+      self->streamEmpty = true;
       gnutls_transport_set_errno(self->session, EAGAIN);
       return -1;
     }
 
-    if (in->getend() - in->getptr() < (ptrdiff_t)size)
-      size = in->getend() - in->getptr();
+    if (in->avail() < size)
+      size = in->avail();
   
     in->readBytes(data, size);
-
+  } catch (EndOfStream&) {
+    return 0;
+  } catch (SystemException &e) {
+    vlog.error("Failure reading TLS data: %s", e.str());
+    gnutls_transport_set_errno(self->session, e.err);
+    self->saved_exception = new SystemException(e);
+    return -1;
   } catch (Exception& e) {
+    vlog.error("Failure reading TLS data: %s", e.str());
     gnutls_transport_set_errno(self->session, EINVAL);
+    self->saved_exception = new Exception(e);
     return -1;
   }
 
@@ -57,11 +72,9 @@ ssize_t TLSInStream::pull(gnutls_transport_ptr_t str, void* data, size_t size)
 }
 
 TLSInStream::TLSInStream(InStream* _in, gnutls_session_t _session)
-  : session(_session), in(_in), bufSize(DEFAULT_BUF_SIZE), offset(0)
+  : session(_session), in(_in), saved_exception(NULL)
 {
   gnutls_transport_ptr_t recv, send;
-
-  ptr = end = start = new U8[bufSize];
 
   gnutls_transport_set_pull_function(session, pull);
   gnutls_transport_get_ptr2(session, &recv, &send);
@@ -72,52 +85,46 @@ TLSInStream::~TLSInStream()
 {
   gnutls_transport_set_pull_function(session, NULL);
 
-  delete[] start;
+  delete saved_exception;
 }
 
-int TLSInStream::pos()
+bool TLSInStream::fillBuffer()
 {
-  return offset + ptr - start;
+  size_t n = readTLS((U8*) end, availSpace());
+  if (n == 0)
+    return false;
+  end += n;
+
+  return true;
 }
 
-int TLSInStream::overrun(int itemSize, int nItems, bool wait)
-{
-  if (itemSize > bufSize)
-    throw Exception("TLSInStream overrun: max itemSize exceeded");
-
-  if (end - ptr != 0)
-    memmove(start, ptr, end - ptr);
-
-  offset += ptr - start;
-  end -= ptr - start;
-  ptr = start;
-
-  while (end < start + itemSize) {
-    int n = readTLS((U8*) end, start + bufSize - end, wait);
-    if (!wait && n == 0)
-      return 0;
-    end += n;
-  }
-
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
-
-  return nItems;
-}
-
-int TLSInStream::readTLS(U8* buf, int len, bool wait)
+size_t TLSInStream::readTLS(U8* buf, size_t len)
 {
   int n;
 
-  n = in->check(1, 1, wait);
+  while (true) {
+    streamEmpty = false;
+    n = gnutls_record_recv(session, (void *) buf, len);
+    if (n == GNUTLS_E_INTERRUPTED || n == GNUTLS_E_AGAIN) {
+      // GnuTLS returns GNUTLS_E_AGAIN for a bunch of other scenarios
+      // other than the pull function returning EAGAIN, so we have to
+      // double check that the underlying stream really is empty
+      if (!streamEmpty)
+        continue;
+      else
+        return 0;
+    }
+    break;
+  };
+
+  if (n == GNUTLS_E_PULL_ERROR)
+    throw *saved_exception;
+
+  if (n < 0)
+    throw TLSException("readTLS", n);
+
   if (n == 0)
-    return 0;
-
-  n = gnutls_record_recv(session, (void *) buf, len);
-  if (n == GNUTLS_E_INTERRUPTED || n == GNUTLS_E_AGAIN)
-    return 0;
-
-  if (n < 0) throw TLSException("readTLS", n);
+    throw EndOfStream();
 
   return n;
 }

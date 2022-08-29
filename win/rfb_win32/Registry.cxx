@@ -18,6 +18,10 @@
 
 // -=- Registry.cxx
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rfb_win32/Registry.h>
 #include <rfb_win32/Security.h>
 #include <rdr/MemOutStream.h>
@@ -146,7 +150,7 @@ void RegKey::setString(const TCHAR* valname, const TCHAR* value) const {
   if (result != ERROR_SUCCESS) throw rdr::SystemException("setString", result);
 }
 
-void RegKey::setBinary(const TCHAR* valname, const void* value, int length) const {
+void RegKey::setBinary(const TCHAR* valname, const void* value, size_t length) const {
   LONG result = RegSetValueEx(key, valname, 0, REG_BINARY, (const BYTE*)value, length);
   if (result != ERROR_SUCCESS) throw rdr::SystemException("setBinary", result);
 }
@@ -169,12 +173,12 @@ TCHAR* RegKey::getString(const TCHAR* valname, const TCHAR* def) const {
   }
 }
 
-void RegKey::getBinary(const TCHAR* valname, void** data, int* length) const {
+void RegKey::getBinary(const TCHAR* valname, void** data, size_t* length) const {
   TCharArray hex(getRepresentation(valname));
   if (!rdr::HexInStream::hexStrToBin(CStr(hex.buf), (char**)data, length))
     throw rdr::Exception("getBinary failed");
 }
-void RegKey::getBinary(const TCHAR* valname, void** data, int* length, void* def, int deflen) const {
+void RegKey::getBinary(const TCHAR* valname, void** data, size_t* length, void* def, size_t deflen) const {
   try {
     getBinary(valname, data, length);
   } catch(rdr::Exception&) {

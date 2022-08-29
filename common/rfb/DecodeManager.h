@@ -47,18 +47,29 @@ namespace rfb {
     DecodeManager(CConnection *conn);
     ~DecodeManager();
 
-    void decodeRect(const Rect& r, int encoding,
+    bool decodeRect(const Rect& r, int encoding,
                     ModifiablePixelBuffer* pb);
 
     void flush();
 
   private:
+    void logStats();
+
     void setThreadException(const rdr::Exception& e);
     void throwThreadException();
 
   private:
     CConnection *conn;
     Decoder *decoders[encodingMax+1];
+
+    struct DecoderStats {
+      unsigned rects;
+      unsigned long long bytes;
+      unsigned long long pixels;
+      unsigned long long equivalent;
+    };
+
+    DecoderStats stats[encodingMax+1];
 
     struct QueueEntry {
       bool active;

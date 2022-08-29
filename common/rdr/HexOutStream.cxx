@@ -16,28 +16,25 @@
  * USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <rdr/HexOutStream.h>
 #include <rdr/Exception.h>
 
 using namespace rdr;
 
-const int DEFAULT_BUF_LEN = 16384;
+static inline size_t min(size_t a, size_t b) {return a<b ? a : b;}
 
-static inline int min(int a, int b) {return a<b ? a : b;}
-
-HexOutStream::HexOutStream(OutStream& os, int buflen)
-: out_stream(os), offset(0), bufSize(buflen ? buflen : DEFAULT_BUF_LEN)
+HexOutStream::HexOutStream(OutStream& os)
+  : out_stream(os)
 {
-  if (bufSize % 2)
-    bufSize--;
-  ptr = start = new U8[bufSize];
-  end = start + bufSize;
 }
 
-HexOutStream::~HexOutStream() {
-  delete [] start;
+HexOutStream::~HexOutStream()
+{
 }
-
 
 char HexOutStream::intToHex(int i) {
   if ((i>=0) && (i<=9))
@@ -48,9 +45,9 @@ char HexOutStream::intToHex(int i) {
     throw rdr::Exception("intToHex failed");
 }
 
-char* HexOutStream::binToHexStr(const char* data, int length) {
+char* HexOutStream::binToHexStr(const char* data, size_t length) {
   char* buffer = new char[length*2+1];
-  for (int i=0; i<length; i++) {
+  for (size_t i=0; i<length; i++) {
     buffer[i*2] = intToHex((data[i] >> 4) & 15);
     buffer[i*2+1] = intToHex((data[i] & 15));
     if (!buffer[i*2] || !buffer[i*2+1]) {
@@ -62,49 +59,33 @@ char* HexOutStream::binToHexStr(const char* data, int length) {
   return buffer;
 }
 
+bool HexOutStream::flushBuffer()
+{
+  while (sentUpTo != ptr) {
+    U8* optr = out_stream.getptr(2);
+    size_t length = min(ptr-sentUpTo, out_stream.avail()/2);
 
-void
-HexOutStream::writeBuffer() {
-  U8* pos = start;
-  while (pos != ptr) {
-    out_stream.check(2);
-    U8* optr = out_stream.getptr();
-    U8* oend = out_stream.getend();
-    int length = min(ptr-pos, (oend-optr)/2);
-
-    for (int i=0; i<length; i++) {
-      optr[i*2] = intToHex((pos[i] >> 4) & 0xf);
-      optr[i*2+1] = intToHex(pos[i] & 0xf);
+    for (size_t i=0; i<length; i++) {
+      optr[i*2] = intToHex((sentUpTo[i] >> 4) & 0xf);
+      optr[i*2+1] = intToHex(sentUpTo[i] & 0xf);
     }
 
-    out_stream.setptr(optr + length*2);
-    pos += length;
+    out_stream.setptr(length*2);
+    sentUpTo += length;
   }
-  offset += ptr - start;
-  ptr = start;
-}
 
-int HexOutStream::length()
-{
-  return offset + ptr - start;
+  return true;
 }
 
 void
 HexOutStream::flush() {
-  writeBuffer();
+  BufferedOutStream::flush();
   out_stream.flush();
 }
 
-int
-HexOutStream::overrun(int itemSize, int nItems) {
-  if (itemSize > bufSize)
-    throw Exception("HexOutStream overrun: max itemSize exceeded");
-
-  writeBuffer();
-
-  if (itemSize * nItems > end - ptr)
-    nItems = (end - ptr) / itemSize;
-
-  return nItems;
+void HexOutStream::cork(bool enable)
+{
+  BufferedOutStream::cork(enable);
+  out_stream.cork(enable);
 }
 

@@ -14,6 +14,7 @@ if (GETTEXT_XGETTEXT_EXECUTABLE)
     ${PROJECT_SOURCE_DIR}/vncviewer/*.h
     ${PROJECT_SOURCE_DIR}/vncviewer/*.cxx
     ${PROJECT_SOURCE_DIR}/vncviewer/*.desktop.in.in
+    ${PROJECT_SOURCE_DIR}/vncviewer/*.metainfo.xml.in
   )
 
   add_custom_target(translations_update
@@ -41,12 +42,12 @@ foreach(lang ${po_FILES})
 
   # Add command to build X.mo from X.po
   add_custom_command(OUTPUT ${mo}
-    COMMAND ${GETTEXT_MSGFMT_EXECUTABLE} -o ${mo} ${po}
+    COMMAND ${GETTEXT_MSGFMT_EXECUTABLE} --check -o ${mo} ${po}
     DEPENDS ${po}
   )
 
   install(FILES ${mo}
-    DESTINATION "${LOCALE_DIR}/${lang}/LC_MESSAGES"
+    DESTINATION "${CMAKE_INSTALL_FULL_LOCALEDIR}/${lang}/LC_MESSAGES"
     RENAME tigervnc.mo
   )
 

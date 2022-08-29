@@ -64,7 +64,7 @@ add_library(rfb STATIC
   ZRLEDecoder.cxx
   encodings.cxx
   util.cxx
-  PARENT_SCOPE)
+)
 
 target_link_libraries(rfb os rdr)
 target_link_libraries(rfb ${JPEG_LIBRARIES} Xregion)

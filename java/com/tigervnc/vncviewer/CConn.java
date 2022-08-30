@@ -213,6 +213,8 @@ public class CConn extends CConnection implements
     int encNum = Encodings.encodingNum(preferredEncoding.getValue());
     if (encNum != -1)
       setPreferredEncoding(encNum);
+
+    AudioPlayerExtension.runAudioPlayerThread(getServerName(), audioPort.getValue());
   }
 
   // setDesktopSize() is called when the desktop size changes (including when

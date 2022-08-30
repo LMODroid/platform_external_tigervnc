@@ -87,6 +87,7 @@ public class VncViewer implements Runnable {
 
   public static void setLookAndFeel() {
     try {
+      System.setProperty("awt.useSystemAAFontSettings", "lcd");
       if (os.startsWith("mac os x")) {
         String appClassName = new String("com.apple.eawt.Application");
         String appMethodName = new String("getApplication");

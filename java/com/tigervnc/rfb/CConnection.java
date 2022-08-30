@@ -665,7 +665,7 @@ abstract public class CConnection extends CMsgHandler {
 
     if (server.supportsLocalCursor) {
       // JRE on Windows does not support cursors with alpha
-      if (!osName.contains("windows")) {
+      if (!osName.contains("windows") && !osName.contains("linux")) {
         encodings.add(Encodings.pseudoEncodingCursorWithAlpha);
         encodings.add(Encodings.pseudoEncodingVMwareCursor);
       }

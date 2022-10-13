@@ -109,19 +109,14 @@ public class VncViewer implements Runnable {
           appClass.getMethod(setIconMethodName, paramTypes);
         setDockIconImage.invoke(app, VncViewer.logoImage);
       }
-      // Use Nimbus LookAndFeel if it's available, otherwise fallback
+      // Use default laf if it's available, otherwise fallback
       // to the native laf, or Metal if no native laf is available.
       String laf = System.getProperty("swing.defaultlaf");
       if (laf == null) {
-        LookAndFeelInfo[] installedLafs = UIManager.getInstalledLookAndFeels();
-        for (int i = 0; i < installedLafs.length; i++) {
-          if (installedLafs[i].getName().equals("Nimbus"))
-            laf = installedLafs[i].getClassName();
-        }
-        if (laf == null)
-          UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+      } else {
+        UIManager.setLookAndFeel(laf);
       }
-      UIManager.setLookAndFeel(laf);
       if (UIManager.getLookAndFeel().getName().equals("Metal")) {
         UIManager.put("swing.boldMetal", Boolean.FALSE);
         Enumeration<Object> keys = UIManager.getDefaults().keys();

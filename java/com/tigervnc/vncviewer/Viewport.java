@@ -632,15 +632,15 @@ class Viewport extends JPanel implements ActionListener {
 
     menu_add(contextMenu, "Refresh screen", KeyEvent.VK_R,
              this, ID.REFRESH, EnumSet.of(MENU.DIVIDER));
-
+/*
     menu_add(contextMenu, "New connection...", KeyEvent.VK_N,
              this, ID.NEWVIEWER, EnumSet.of(MENU.DIVIDER));
-
+*/
     menu_add(contextMenu, "Options...", KeyEvent.VK_O,
              this, ID.OPTIONS, EnumSet.noneOf(MENU.class));
     menu_add(contextMenu, "Connection info...", KeyEvent.VK_I,
              this, ID.INFO, EnumSet.noneOf(MENU.class));
-    menu_add(contextMenu, "About TigerVNC viewer...", KeyEvent.VK_T,
+    menu_add(contextMenu, "About Desktop Mode...", KeyEvent.VK_T,
              this, ID.ABOUT, EnumSet.of(MENU.DIVIDER));
 
     menu_add(contextMenu, "Dismiss menu", KeyEvent.VK_M,

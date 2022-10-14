@@ -137,7 +137,7 @@ class ClipboardDialog extends Dialog {
 
   public ClipboardDialog() {
     super(false);
-    setTitle("VNC Clipboard Viewer");
+    setTitle("Clipboard Viewer");
     setPreferredSize(new Dimension(640, 480));
     addWindowFocusListener(new WindowFocusListener() {
       // Necessary to ensure that updates from the system clipboard
@@ -153,7 +153,7 @@ class ClipboardDialog extends Dialog {
     JPanel pb = new JPanel();
     clearButton = new JButton("Clear");
     pb.add(clearButton);
-    sendButton = new JButton("Send to VNC server");
+    sendButton = new JButton("Send to device");
     pb.add(sendButton);
     cancelButton = new JButton("Cancel");
     pb.add(cancelButton);

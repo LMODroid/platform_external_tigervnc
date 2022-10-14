@@ -174,7 +174,7 @@ class OptionsDialog extends Dialog {
   @SuppressWarnings({"rawtypes","unchecked"})
   public OptionsDialog() {
     super(true);
-    setTitle("VNC Viewer Options");
+    setTitle("Options");
     setResizable(false);
 
     getContentPane().setLayout(
@@ -878,7 +878,7 @@ class OptionsDialog extends Dialog {
     authPanel.setBorder(BorderFactory.createTitledBorder("Authentication"));
 
     authNoneCheckbox = new JCheckBox("None");
-    authVncCheckbox = new JCheckBox("Standard VNC");
+    authVncCheckbox = new JCheckBox("Standard");
     authPlainCheckbox = new JCheckBox("Plaintext");
     authPlainCheckbox.addItemListener(new ItemListener() {
       public void itemStateChanged(ItemEvent e) {

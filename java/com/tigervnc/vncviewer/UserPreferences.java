@@ -29,7 +29,7 @@ import com.tigervnc.rfb.*;
 
 public class UserPreferences {
 
-  private static Preferences root = Preferences.userRoot().node("TigerVNC");
+  private static Preferences root = Preferences.userRoot().node("LmoDesktopMode");
 
   public static void set(String nName, String key, String val) {
     Preferences node = root.node(nName);

@@ -61,7 +61,11 @@ import static com.tigervnc.vncviewer.Parameters.*;
 public class VncViewer implements Runnable {
 
   public static final String aboutText =
-    new String("TigerVNC Java Viewer v%s (%s)%n"+
+    new String("LibreMobileOS Desktop Mode Client v0.0%n"+
+               "Copyright (C) 2022 LibreMobileOS%n"+
+               "See https://libremobileos.com for information on LibreMobileOS.%n"+
+               "%nBased on:%n"+
+               "TigerVNC Java Viewer v%s (%s)%n"+
                "Built on %s at %s%n"+
                "Copyright (C) 1999-2022 TigerVNC Team and many others (see README.rst)%n"+
                "See https://www.tigervnc.org for information on TigerVNC.");
@@ -355,7 +359,7 @@ public class VncViewer implements Runnable {
     JOptionPane op =
       new JOptionPane(msg, JOptionPane.INFORMATION_MESSAGE,
                       JOptionPane.DEFAULT_OPTION, VncViewer.logoIcon, options);
-    JDialog dlg = op.createDialog(parent, "About TigerVNC Viewer for Java");
+    JDialog dlg = op.createDialog(parent, "About Desktop Mode");
     dlg.setIconImage(VncViewer.frameIcon);
     dlg.setAlwaysOnTop(true);
     dlg.setVisible(true);

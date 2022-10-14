@@ -47,7 +47,7 @@ class ServerDialog extends Dialog implements Runnable {
     super(true);
     this.vncServerName = vncServerName;
     setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
-    setTitle("VNC Viewer: Connection Details");
+    setTitle("Connection Details");
     setResizable(false);
     addWindowListener(new WindowAdapter() {
       public void windowClosing(WindowEvent e) {
@@ -56,7 +56,7 @@ class ServerDialog extends Dialog implements Runnable {
       }
     });
 
-    JLabel serverLabel = new JLabel("VNC server:", JLabel.RIGHT);
+    JLabel serverLabel = new JLabel("Device:", JLabel.RIGHT);
     String valueStr = new String(defaultServerName);
     ArrayList<String> servernames = new ArrayList<String>();
     if (!valueStr.isEmpty())
@@ -79,9 +79,9 @@ class ServerDialog extends Dialog implements Runnable {
       }
     });
     if (servernames.size() == 0)
-      serverName.setPrototypeDisplayValue("255.255.255.255:5900");
+      serverName.setPrototypeDisplayValue("No device found");
 
-    serverName.setEditable(true);
+    /*serverName.setEditable(true);
     editor = serverName.getEditor();
     editor.getEditorComponent().addKeyListener(new KeyListener() {
       public void keyTyped(KeyEvent e) {}
@@ -93,12 +93,13 @@ class ServerDialog extends Dialog implements Runnable {
           handleConnect();
         }
       }
-    });
+    });*/
 
     Container contentPane = this.getContentPane();
     contentPane.setLayout(new GridBagLayout());
 
     JLabel icon = new JLabel(VncViewer.logoIcon);
+    /*
     optionsButton = new JButton("Options...");
     optionsButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
@@ -116,14 +117,14 @@ class ServerDialog extends Dialog implements Runnable {
       public void actionPerformed(ActionEvent e) {
         handleSaveAs();
       }
-    });
+    });*/
     aboutButton = new JButton("About...");
     aboutButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
         handleAbout();
       }
     });
-    cancelButton = new JButton("Cancel");
+    cancelButton = new JButton("Exit");
     cancelButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
         handleCancel();
@@ -170,7 +171,7 @@ class ServerDialog extends Dialog implements Runnable {
 		    .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
 		      .addGroup(layout.createSequentialGroup()
 		        .addGap(10)
-		        .addComponent(optionsButton))
+		        /*.addComponent(optionsButton)*/)
 		      .addComponent(separator1)
 		      .addGroup(layout.createSequentialGroup()
 		        .addGap(10)
@@ -178,10 +179,10 @@ class ServerDialog extends Dialog implements Runnable {
 		    .addGroup(layout.createParallelGroup(GroupLayout.Alignment.TRAILING)
 		      .addGroup(layout.createSequentialGroup()
 		        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
-		        .addComponent(loadButton)
+		        /*.addComponent(loadButton)
 		        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
 		        .addComponent(saveAsButton)
-		        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
+		        .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)*/
 		        .addComponent(box)
 		        .addGap(10))
 		      .addComponent(separator2)
@@ -194,9 +195,9 @@ class ServerDialog extends Dialog implements Runnable {
 		layout.setVerticalGroup(
 		  layout.createSequentialGroup()
 		    .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-		      .addComponent(optionsButton)
+		      /*.addComponent(optionsButton)
 		      .addComponent(loadButton)
-		      .addComponent(saveAsButton)
+		      .addComponent(saveAsButton)*/
 		      .addComponent(box))
 		    .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
 		    .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
@@ -210,7 +211,7 @@ class ServerDialog extends Dialog implements Runnable {
 		    .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
 		);
 		layout.linkSize(SwingConstants.HORIZONTAL,
-                    optionsButton, loadButton, saveAsButton,
+                    //optionsButton, loadButton, saveAsButton,
                     aboutButton, cancelButton, box);
     contentPane.add(buttonPane1,
                     new GridBagConstraints(0, 1,
@@ -258,7 +259,7 @@ class ServerDialog extends Dialog implements Runnable {
       JOptionPane op =
         new JOptionPane(msg, JOptionPane.QUESTION_MESSAGE,
                         JOptionPane.OK_CANCEL_OPTION, null, options, options[1]);
-      JDialog dlg = op.createDialog(this, "TigerVNC Viewer");
+      JDialog dlg = op.createDialog(this, "Save as...");
       dlg.setIconImage(VncViewer.frameIcon);
       dlg.setAlwaysOnTop(true);
       dlg.setVisible(true);

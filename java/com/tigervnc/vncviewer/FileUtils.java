@@ -67,7 +67,7 @@ public class FileUtils {
   }
 
   public static final String getVncHomeDir() {
-    return getHomeDir()+".vnc"+getFileSeparator();
+    return getHomeDir()+".DesktopMode"+getFileSeparator();
   }
 
   public static final String getFileSeparator() {

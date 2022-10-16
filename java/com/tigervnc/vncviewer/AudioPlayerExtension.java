@@ -10,16 +10,21 @@ import java.net.Socket;
 
 public class AudioPlayerExtension {
     public static void runAudioPlayerThread(String host, int port) {
-        Thread tmp = new Thread(new Runnable() {
-            public void run() {
+        if (System.getProperty("lmo.useVlc", "false").equals("true")) {
+            try {
+                Runtime.getRuntime().exec(System.getProperty("lmo.vlcPath", "vlc") + " -Idummy --demux rawaud,none --no-volume-save --no-repeat --rawaud-samplerate=48000 --rawaud-fourcc=s16l --rawaud-channels=2 --network-caching=0 --play-and-exit tcp://" + host + ":" + port);
+            } catch (IOException | SecurityException | NullPointerException | IllegalArgumentException e) {
+                e.printStackTrace();
+            }
+        } else {
+            new Thread(() -> {
                 try {
                     audioPlayer(host, port);
                 } catch (Exception e) {
                     throw new RuntimeException(e.getMessage(), e);
                 }
-            }
-        });
-        tmp.start();
+            }).start();
+        }
     }
 
     public static void audioPlayer(String host, int port) throws Exception {

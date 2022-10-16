@@ -57,8 +57,9 @@ class ServerDialog extends Dialog implements Runnable {
     });
 
     JLabel serverLabel = new JLabel("Device:", JLabel.RIGHT);
-    String valueStr = new String(defaultServerName);
+    /*
     ArrayList<String> servernames = new ArrayList<String>();
+    String valueStr = new String(defaultServerName);
     if (!valueStr.isEmpty())
       servernames.add(valueStr);
     String history = UserPreferences.get("ServerDialog", "history");
@@ -68,6 +69,9 @@ class ServerDialog extends Dialog implements Runnable {
           servernames.add(s);
       }
     }
+    */
+    ArrayList<String> servernames = new ArrayList<>(AdbUtils.findOnlineDevicesFancy());
+
     serverName = new MyJComboBox(servernames.toArray());
     serverName.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
@@ -282,7 +286,9 @@ class ServerDialog extends Dialog implements Runnable {
 
   private void handleConnect() {
     String servername = (String)serverName.getSelectedItem();
-    servername.trim();
+    if (servername == null)
+        return;
+    servername = AdbUtils.setupServerForDeviceMaybe(servername.trim());
     vncServerName.put(servername).flip();
     saveViewerParameters(null, servername);
     endDialog();

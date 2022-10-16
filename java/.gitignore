@@ -2,3 +2,6 @@
 VncViewer.jar
 cmake_install.cmake
 com/tigervnc/vncviewer/timestamp
+.fleet
+.idea
+*.iml

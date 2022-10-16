@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class AdbUtils {
@@ -70,7 +71,7 @@ public class AdbUtils {
         // Phones without SIM card aren't guranteed to have the correct time
         long offset = (System.currentTimeMillis() / 1000L) - Long.parseLong(Objects.requireNonNull(normalizeOneliner(runAdbFor(sn, "shell date +%s"))));
         // (Ab)use logcat to search for one "Listening on @vncflinger" printed from when this command was executed
-        runAdbFor(sn, "logcat -T " + ((System.currentTimeMillis() / 1000L) - offset) + ".000 -m 1 --regex \"Listening on @vncflinger\"");
+        runAdbFor(sn, "logcat -T " + ((System.currentTimeMillis() / 1000L) - offset) + ".000 -m 1 --regex \"Listening on @vncflinger\"", 10);
         int vncPort = setupForwardForSerial(sn);
         return ":" + vncPort;
     }
@@ -169,7 +170,7 @@ public class AdbUtils {
         }
     }
 
-    private static PrReturn run(String command) {
+    private static PrReturn run(String command, int timeoutSec) {
         // Runtime.exec(String) uses StringTokenizer which does not support escaping
         String[] cmd = StringUtilities.splitWords(command);
         //System.out.println(Arrays.toString(cmd)); //DEBUG
@@ -185,8 +186,17 @@ public class AdbUtils {
         }
         int exitCode;
         try {
-            exitCode = pr.waitFor();
-        } catch (InterruptedException e) {
+            if (timeoutSec == 0) {
+                exitCode = pr.waitFor();
+            } else {
+                if (pr.waitFor(timeoutSec, TimeUnit.SECONDS)) {
+                    exitCode = pr.exitValue();
+                } else {
+                    pr.destroyForcibly();
+                    throw new InterruptedException("timeout expired");
+                }
+            }
+        } catch (InterruptedException | IllegalThreadStateException e) {
             return new PrReturn(-1, "failed to wait: " + e.getMessage());
         }
         String output;
@@ -200,7 +210,7 @@ public class AdbUtils {
     }
 
     private static boolean tryAdb(String toTry) {
-        PrReturn result = run(toTry + " devices");
+        PrReturn result = run(toTry + " devices", 10);
         return result.exitCode == 0 && result.output.contains("List of devices attached");
     }
 
@@ -244,12 +254,20 @@ public class AdbUtils {
         return adbExec;
     }
 
+    private static PrReturn runAdbReal(String command, int timeoutsec) {
+        return run(requireAdbExec() + " " + command, timeoutsec);
+    }
+
     private static PrReturn runAdbReal(String command) {
-        return run(requireAdbExec() + " " + command);
+        return runAdbReal(command, 0);
+    }
+
+    private static PrReturn runAdbForReal(String sn, String command, int timeoutsec) {
+        return runAdbReal("-s " + sn + " " + command, timeoutsec);
     }
 
     private static PrReturn runAdbForReal(String sn, String command) {
-        return runAdbReal("-s " + sn + " " + command);
+        return runAdbForReal(sn, command, 0);
     }
 
     private static String assertOk(PrReturn r) {
@@ -263,5 +281,13 @@ public class AdbUtils {
 
     private static String runAdbFor(String sn, String command) {
         return assertOk(runAdbForReal(sn, command));
+    }
+
+    private static String runAdb(String command, int timeoutsec) {
+        return assertOk(runAdbReal(command, timeoutsec));
+    }
+
+    private static String runAdbFor(String sn, String command, int timeoutsec) {
+        return assertOk(runAdbForReal(sn, command, timeoutsec));
     }
 }

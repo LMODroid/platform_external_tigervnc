@@ -3,7 +3,9 @@ package com.tigervnc.vncviewer;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class AdbUtils {
@@ -37,13 +39,9 @@ public class AdbUtils {
 
     // Helpers
     private static String getNameForSn(String sn) {
-        String[] result = runAdbFor(sn, "shell getprop ro.product.model").split("\n");
-        for (String s : result) {
-            String line = s.trim();
-            if (line.isEmpty() || line.isBlank() || line.startsWith("*"))
-                continue;
-            return line + " (" + sn + ")";
-        }
+        String result = normalizeOneliner(runAdbFor(sn, "shell getprop ro.product.model"));
+        if (result != null)
+            return result + " (" + sn + ")";
         return sn;
     }
 
@@ -69,11 +67,10 @@ public class AdbUtils {
     private static String setupServerForSerial(String sn) {
         assert isDevicePresent(sn);
         runAdbFor(sn, "shell am broadcast --allow-background-activity-starts -a com.libremobileos.desktopmode.START com.libremobileos.desktopmode/.VNCServiceController");
-        try {
-            Thread.sleep(2500); //TODO: don't..
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        // Phones without SIM card aren't guranteed to have the correct time
+        long offset = (System.currentTimeMillis() / 1000L) - Long.parseLong(Objects.requireNonNull(normalizeOneliner(runAdbFor(sn, "shell date +%s"))));
+        // (Ab)use logcat to search for one "Listening on @vncflinger" printed from when this command was executed
+        runAdbFor(sn, "logcat -T " + ((System.currentTimeMillis() / 1000L) - offset) + ".000 -m 1 --regex \"Listening on @vncflinger\"");
         int vncPort = setupForwardForSerial(sn);
         return ":" + vncPort;
     }
@@ -101,10 +98,10 @@ public class AdbUtils {
                 continue;
             String[] forward = line.split(" ");
             assert forward.length == 3;
+            if (forward[0].equals(sn) && forward[2].equals("localabstract:" + socket)) // Same device already has forward
+                return Integer.parseInt(forward[1].substring(4));
             if (forward[1].equals("tcp:" + port))
                 return -1; // Port in use by adbd
-            if (forward[0].equals(sn) && forward[2].equals("localabstract:" + socket)) // Same device already has forward
-                return Integer.parseInt(forward[1].substring(5));
         }
         PrReturn r = runAdbForReal(sn, "forward tcp:" + port + " localabstract:" + socket);
         if (r.exitCode == 0)
@@ -114,6 +111,16 @@ public class AdbUtils {
     }
 
     // Util
+    private static String normalizeOneliner(String result) {
+        String[] data = result.split("\n");
+        for (String s : data) {
+            String line = s.trim();
+            if (line.isEmpty() || line.isBlank() || line.startsWith("*"))
+                continue;
+            return line;
+        }
+        return null;
+    }
     private static String adbExec;
 
     private static class PrReturn {
@@ -126,11 +133,50 @@ public class AdbUtils {
         }
     }
 
+    // https://stackoverflow.com/a/65057991
+    private static final class StringUtilities {
+        private static final List<Character> WORD_DELIMITERS = Arrays.asList(' ', '\t');
+        private static final List<Character> QUOTE_CHARACTERS = Arrays.asList('"', '\'');
+        private static final char ESCAPE_CHARACTER = '\\';
+        private StringUtilities() {}
+        public static String[] splitWords(String string) {
+            StringBuilder wordBuilder = new StringBuilder();
+            List<String> words = new ArrayList<>();
+            char quote = 0;
+
+            for (int i = 0; i < string.length(); i++) {
+                char c = string.charAt(i);
+
+                if (c == ESCAPE_CHARACTER && i + 1 < string.length()) {
+                    wordBuilder.append(string.charAt(++i));
+                } else if (WORD_DELIMITERS.contains(c) && quote == 0) {
+                    words.add(wordBuilder.toString());
+                    wordBuilder.setLength(0);
+                } else if (quote == 0 && QUOTE_CHARACTERS.contains(c)) {
+                    quote = c;
+                } else if (quote == c) {
+                    quote = 0;
+                } else {
+                    wordBuilder.append(c);
+                }
+            }
+
+            if (wordBuilder.length() > 0) {
+                words.add(wordBuilder.toString());
+            }
+
+            return words.toArray(new String[0]);
+        }
+    }
+
     private static PrReturn run(String command) {
+        // Runtime.exec(String) uses StringTokenizer which does not support escaping
+        String[] cmd = StringUtilities.splitWords(command);
+        //System.out.println(Arrays.toString(cmd)); //DEBUG
         Runtime rt = Runtime.getRuntime();
         Process pr;
         try {
-            pr = rt.exec(command);
+            pr = rt.exec(cmd);
         } catch (IOException | SecurityException | NullPointerException | IllegalArgumentException e) {
             return new PrReturn(-1, "failed to start: " + e.getMessage());
         }

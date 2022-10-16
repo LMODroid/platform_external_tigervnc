@@ -435,7 +435,7 @@ public class VncViewer implements Runnable {
     }
 
     try {
-      cc = new CConn(vncServerName.toString(), sock);
+      cc = new CConn(AdbUtils.setupServerForDeviceMaybe(vncServerName.toString()), sock);
       while (!cc.shuttingDown)
         cc.processMsg();
       exit(0);

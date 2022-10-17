@@ -372,6 +372,7 @@ public class VncViewer implements Runnable {
   }
 
   public void exit(int n) {
+    AdbUtils.maybeDesetupDevice();
     System.exit(n);
   }
 

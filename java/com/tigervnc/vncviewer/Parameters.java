@@ -283,6 +283,11 @@ public class Parameters {
   = new IntParameter("vncPort",
     "VNC TCP port. ", 9300);
 
+  public static BoolParameter killDesktop
+  = new BoolParameter("killDesktop",
+    "Kill desktop. Default = true",
+    true);
+
   private static final String IDENTIFIER_STRING
   = "TigerVNC Configuration file Version 1.0";
 
@@ -323,6 +328,7 @@ public class Parameters {
     sshKeyFile,
     audioPort,
     vncPort,
+    killDesktop,
   };
 
 

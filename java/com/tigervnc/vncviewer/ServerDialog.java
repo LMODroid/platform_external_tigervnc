@@ -288,7 +288,7 @@ class ServerDialog extends Dialog implements Runnable {
     String servername = (String)serverName.getSelectedItem();
     if (servername == null)
         return;
-    servername = AdbUtils.setupServerForDeviceMaybe(servername.trim());
+    servername = servername.trim();
     vncServerName.put(servername).flip();
     saveViewerParameters(null, servername);
     endDialog();

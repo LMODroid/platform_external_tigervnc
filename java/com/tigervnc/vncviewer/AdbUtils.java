@@ -38,7 +38,35 @@ public class AdbUtils {
         return setupServerForSerial(value); // Direct serial (for command line start)
     }
 
+    public static void maybeDesetupDevice() {
+        int vncPort = Parameters.vncPort.getValue();
+        int audioPort = Parameters.audioPort.getValue();
+        String sn = getSnForForward(vncPort, "vncflinger");
+        if (sn == null)
+            return;
+        if (!sn.equals(getSnForForward(audioPort, "audiostreamer")))
+            return;
+        runAdb("forward --remove tcp:" + vncPort);
+        runAdb("forward --remove tcp:" + audioPort);
+        if (Parameters.killDesktop.getValue())
+            runAdbFor(sn, "shell am stop-service com.libremobileos.vncflinger/.VncFlinger");
+    }
+
     // Helpers
+    private static String getSnForForward(int port, String socket) {
+        String[] forwards = runAdb("forward --list").split("\n");
+        for (String s : forwards) {
+            String line = s.trim();
+            if (line.isEmpty() || line.isBlank() || line.startsWith("*"))
+                continue;
+            String[] forward = line.split(" ");
+            assert forward.length == 3;
+            if (forward[1].equals("tcp:" + port) && forward[2].equals("localabstract:" + socket))
+                return forward[0];
+        }
+        return null;
+    }
+
     private static String getNameForSn(String sn) {
         String result = normalizeOneliner(runAdbFor(sn, "shell getprop ro.product.model"));
         if (result != null)

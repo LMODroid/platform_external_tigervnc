@@ -278,6 +278,10 @@ public class Parameters {
   public static IntParameter audioPort
   = new IntParameter("audioPort",
     "Audio TCP port. ", 9200);
+  
+  public static IntParameter vncPort
+  = new IntParameter("vncPort",
+    "VNC TCP port. ", 9300);
 
   private static final String IDENTIFIER_STRING
   = "TigerVNC Configuration file Version 1.0";
@@ -318,6 +322,7 @@ public class Parameters {
     sshConfig,
     sshKeyFile,
     audioPort,
+    vncPort,
   };
 
 

@@ -83,11 +83,12 @@ public class AdbUtils {
             audioPort = trySetupForward(sn, "audiostreamer", audioPortDef++);
         }
         Parameters.audioPort.setParam(audioPort);
-        int vncPortDef = 9300;
+        int vncPortDef = Parameters.vncPort.getValue();
         int vncPort = -1;
         while (vncPort == -1) {
             vncPort = trySetupForward(sn, "vncflinger", vncPortDef++);
         }
+        Parameters.vncPort.setParam(vncPort);
         return vncPort;
     }
 

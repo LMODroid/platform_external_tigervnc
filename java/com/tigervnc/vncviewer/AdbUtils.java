@@ -243,7 +243,7 @@ public class AdbUtils {
     }
 
     private static boolean tryAdb(String toTry) {
-        PrReturn result = run("\"" + toTry + "\" devices", 30);
+        PrReturn result = run(toTry + " devices", 10);
         boolean s = result.exitCode == 0 && result.output.contains("List of devices attached");
         if (!s) {
             System.out.println("[adb] binary failed test, path=\"" + toTry + "\" exitCode=" + result.exitCode + " output=\"" + result.output + "\" error=\"" + result.error + "\"");
@@ -254,6 +254,7 @@ public class AdbUtils {
     private static String findAdbExec() {
         String[] adbsToTry = new String[] { System.getProperty("lmo.adbPath", "." + File.separator + "adb"), "adb", "adb.exe" };
         for (String adb : adbsToTry) {
+            adb = "\"" + adb.replace("\\", "\\\\") + "\"";
             if (tryAdb(adb))
                 return adb;
         }
@@ -265,7 +266,6 @@ public class AdbUtils {
         if (adbExec == null) {
             adbExec = findAdbExec();
             if (adbExec != null) {
-                adbExec = "\"" + adbExec + "\"";
                 System.out.println("found adb: " + adbExec);
             }
         }

@@ -239,7 +239,7 @@ public class AdbUtils {
     }
 
     private static boolean tryAdb(String toTry) {
-        PrReturn result = run(toTry + " devices", 30);
+        PrReturn result = run("\"" + toTry + "\" devices", 30);
         return result.exitCode == 0 && result.output.contains("List of devices attached");
     }
 

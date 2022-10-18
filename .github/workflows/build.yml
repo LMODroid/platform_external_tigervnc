@@ -101,7 +101,6 @@ jobs:
       matrix:
         target:
           - centos8
-          - centos7
           - bionic
           - focal
       fail-fast: false

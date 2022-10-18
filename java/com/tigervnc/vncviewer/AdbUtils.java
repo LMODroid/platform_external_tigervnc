@@ -156,10 +156,12 @@ public class AdbUtils {
     private static class PrReturn {
         public final int exitCode;
         public final String output;
+        public final String error;
 
-        public PrReturn(int exitCode, String output) {
+        public PrReturn(int exitCode, String output, String error) {
             this.exitCode = exitCode;
             this.output = output;
+            this.error = error;
         }
     }
 
@@ -208,10 +210,10 @@ public class AdbUtils {
         try {
             pr = rt.exec(cmd);
         } catch (IOException | SecurityException | NullPointerException | IllegalArgumentException e) {
-            return new PrReturn(-1, "failed to start: " + e.getMessage());
+            return new PrReturn(-1, "", "failed to start: " + e.getMessage());
         }
         if (pr == null) {
-            return new PrReturn(-1, "failed to start because pr == null");
+            return new PrReturn(-1, "", "failed to start because pr == null");
         }
         int exitCode;
         try {
@@ -226,21 +228,27 @@ public class AdbUtils {
                 }
             }
         } catch (InterruptedException | IllegalThreadStateException e) {
-            return new PrReturn(-1, "failed to wait: " + e.getMessage());
+            return new PrReturn(-1, "", "failed to wait: " + e.getMessage());
         }
-        String output;
+        String output, error;
         try {
             byte[] b = pr.getInputStream().readAllBytes();
             output = new String(b, 0, b.length);
+            b = pr.getErrorStream().readAllBytes();
+            error = new String(b, 0, b.length);
         } catch (IOException e) {
-            return new PrReturn(-1, "failed to parse: " + e.getMessage());
+            return new PrReturn(-1, "", "failed to parse: " + e.getMessage());
         }
-        return new PrReturn(exitCode, output);
+        return new PrReturn(exitCode, output, error);
     }
 
     private static boolean tryAdb(String toTry) {
         PrReturn result = run("\"" + toTry + "\" devices", 30);
-        return result.exitCode == 0 && result.output.contains("List of devices attached");
+        boolean s = result.exitCode == 0 && result.output.contains("List of devices attached");
+        if (!s) {
+            System.out.println("[adb] binary failed test, path=\"" + toTry + "\" exitCode=" + result.exitCode + " output=\"" + result.output + "\" error=\"" + result.error + "\"");
+        }
+        return s;
     }
 
     private static String findAdbExec() {

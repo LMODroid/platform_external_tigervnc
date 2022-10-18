@@ -250,7 +250,6 @@ public class AdbUtils {
     }
 
     private static String findAdbExec() {
-        //TODO: windows?
         File[] adbsToTry = new File[] { new File("/usr/bin/adb"), new File(System.getProperty("lmo.adbPath", "./adb")) };
         String[] adbsToTry2 = new String[] { "adb" };
         for (File adb : adbsToTry) {
@@ -267,7 +266,7 @@ public class AdbUtils {
 
     private static String getAdbExec() {
         if (adbExec == null) {
-            adbExec = findAdbExec();
+            adbExec = "\"" + findAdbExec() + "\"";
             if (adbExec != null) {
                 System.out.println("found adb: " + adbExec);
             }

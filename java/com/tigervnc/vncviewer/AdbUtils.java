@@ -239,24 +239,13 @@ public class AdbUtils {
     }
 
     private static boolean tryAdb(String toTry) {
-        PrReturn result = run(toTry + " devices", 10);
+        PrReturn result = run(toTry + " devices", 30);
         return result.exitCode == 0 && result.output.contains("List of devices attached");
     }
 
-    private static boolean tryAdbFile(File toTry) {
-        if (!toTry.exists())
-            return false;
-        return tryAdb(toTry.getAbsolutePath());
-    }
-
     private static String findAdbExec() {
-        File[] adbsToTry = new File[] { new File("/usr/bin/adb"), new File(System.getProperty("lmo.adbPath", "./adb")) };
-        String[] adbsToTry2 = new String[] { "adb" };
-        for (File adb : adbsToTry) {
-            if (tryAdbFile(adb))
-                return adb.getAbsolutePath();
-        }
-        for (String adb : adbsToTry2) {
+        String[] adbsToTry = new String[] { System.getProperty("lmo.adbPath", "." + File.separator + "adb"), "adb", "adb.exe" };
+        for (String adb : adbsToTry) {
             if (tryAdb(adb))
                 return adb;
         }
@@ -266,8 +255,9 @@ public class AdbUtils {
 
     private static String getAdbExec() {
         if (adbExec == null) {
-            adbExec = "\"" + findAdbExec() + "\"";
+            adbExec = findAdbExec();
             if (adbExec != null) {
+                adbExec = "\"" + adbExec + "\"";
                 System.out.println("found adb: " + adbExec);
             }
         }

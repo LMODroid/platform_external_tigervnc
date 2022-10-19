@@ -82,8 +82,11 @@ class ServerDialog extends Dialog implements Runnable {
         }
       }
     });
-    if (servernames.size() == 0)
+    if (servernames.size() == 0) {
       serverName.setPrototypeDisplayValue("No device found");
+      // I am sorry
+      throw new RuntimeException("No devices were found. Please make sure you have proper ADB drivers installed for your system and device and your device is connected");
+    }
 
     /*serverName.setEditable(true);
     editor = serverName.getEditor();

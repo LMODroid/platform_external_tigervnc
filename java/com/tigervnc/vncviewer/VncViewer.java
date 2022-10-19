@@ -379,7 +379,7 @@ public class VncViewer implements Runnable {
   void reportException(java.lang.Exception e) {
     String title, msg = e.getMessage();
     int msgType = JOptionPane.ERROR_MESSAGE;
-    title = "TigerVNC Viewer : Error";
+    title = "Desktop Mode : Error";
     e.printStackTrace();
     JOptionPane.showMessageDialog(null, msg, title, msgType);
   }
@@ -425,10 +425,9 @@ public class VncViewer implements Runnable {
         try {
           SwingUtilities.invokeAndWait(
             new ServerDialog(defaultServerName, vncServerName));
-        } catch (InvocationTargetException e) {
+        } catch (java.lang.Exception e) {
           reportException(e);
-        } catch (InterruptedException e) {
-          reportException(e);
+          exit(1);
         }
         if (vncServerName.charAt(0) == 0)
           exit(0);

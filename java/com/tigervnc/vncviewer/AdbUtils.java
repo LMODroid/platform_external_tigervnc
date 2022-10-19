@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.net.URISyntaxException;
 
 public class AdbUtils {
     public static List<String> findOnlineDevices() {
@@ -252,7 +253,16 @@ public class AdbUtils {
     }
 
     private static String findAdbExec() {
-        String[] adbsToTry = new String[] { System.getProperty("lmo.adbPath", "." + File.separator + "adb"), "adb", "adb.exe" };
+        ArrayList<String> adbsToTry = new ArrayList<String>();
+        adbsToTry.add(System.getProperty("lmo.adbPath", "." + File.separator + "adb"));
+        adbsToTry.add("adb");
+        adbsToTry.add("adb.exe");
+        try {
+            File currentJarDir = new File(AdbUtils.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            adbsToTry.add(currentJarDir.getParentFile().getPath() + File.separator + "adb");
+        } catch (URISyntaxException e) {
+            System.err.println("WARN: Failed to get jar path!");
+        }
         for (String adb : adbsToTry) {
             adb = "\"" + adb.replace("\\", "\\\\") + "\"";
             if (tryAdb(adb))

@@ -105,7 +105,7 @@ class ServerDialog extends Dialog implements Runnable {
     Container contentPane = this.getContentPane();
     contentPane.setLayout(new GridBagLayout());
 
-    JLabel icon = new JLabel(VncViewer.logoIcon);
+    JLabel icon = new JLabel(VncViewer.smallLogoIcon);
     /*
     optionsButton = new JButton("Options...");
     optionsButton.addActionListener(new ActionListener() {

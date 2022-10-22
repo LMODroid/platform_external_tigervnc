@@ -80,6 +80,9 @@ public class VncViewer implements Runnable {
   public static final ImageIcon logoIcon =
     new ImageIcon(VncViewer.class.getResource("tigervnc.png"));
   public static final Image logoImage = logoIcon.getImage();
+  public static final ImageIcon smallLogoIcon =
+    new ImageIcon(logoImage.getScaledInstance(
+                  48, 48, java.awt.Image.SCALE_SMOOTH));
   public static final InputStream timestamp =
     VncViewer.class.getResourceAsStream("timestamp");
   public static final String os = 
@@ -358,7 +361,7 @@ public class VncViewer implements Runnable {
     Object[] options = {"Close  \u21B5"};
     JOptionPane op =
       new JOptionPane(msg, JOptionPane.INFORMATION_MESSAGE,
-                      JOptionPane.DEFAULT_OPTION, VncViewer.logoIcon, options);
+                      JOptionPane.DEFAULT_OPTION, VncViewer.smallLogoIcon, options);
     JDialog dlg = op.createDialog(parent, "About Desktop Mode");
     dlg.setIconImage(VncViewer.frameIcon);
     dlg.setAlwaysOnTop(true);

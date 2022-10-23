@@ -61,7 +61,7 @@ import static com.tigervnc.vncviewer.Parameters.*;
 public class VncViewer implements Runnable {
 
   public static final String aboutText =
-    new String("LibreMobileOS Desktop Mode Client v1.0.0%n"+
+    new String("LibreMobileOS Desktop Mode Client v1.0.1%n"+
                "Copyright (C) 2022 LibreMobileOS%n"+
                "See https://libremobileos.com for information on LibreMobileOS.%n"+
                "%nBased on:%n"+

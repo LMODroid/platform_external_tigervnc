@@ -27,26 +27,24 @@
 static void doTest(const char* hostAndPort,
                    const char* expectedHost, int expectedPort)
 {
-    char* host;
+    std::string host;
     int port;
 
     printf("\"%s\": ", hostAndPort);
 
     rfb::getHostAndPort(hostAndPort, &host, &port);
 
-    if (strcmp(host, expectedHost) != 0)
-        printf("FAILED (\"%s\" != \"%s\")", host, expectedHost);
+    if (host != expectedHost)
+        printf("FAILED (\"%s\" != \"%s\")", host.c_str(), expectedHost);
     else if (port != expectedPort)
         printf("FAILED (%d != %d)", port, expectedPort);
     else
         printf("OK");
     printf("\n");
     fflush(stdout);
-
-    rfb::strFree(host);
 }
 
-int main(int argc, char** argv)
+int main(int /*argc*/, char** /*argv*/)
 {
     doTest(":5", "localhost", 5905);
 
@@ -79,6 +77,18 @@ int main(int argc, char** argv)
     doTest("[2001:1234::20:1]:99", "2001:1234::20:1", 5999);
     doTest("[2001:1234::20:1]:100", "2001:1234::20:1", 100);
     doTest("[2001:1234::20:1]:5901", "2001:1234::20:1", 5901);
+
+    doTest("    1.2.3.4    ", "1.2.3.4", 5900);
+    doTest("    1.2.3.4:5901    ", "1.2.3.4", 5901);
+    doTest("    1.2.3.4:   5901    ", "1.2.3.4", 5901);
+    doTest("    1.2.3.4    :5901    ", "1.2.3.4", 5901);
+    doTest("    [1.2.3.4]:5902    ", "1.2.3.4", 5902);
+    doTest("    :5903    ", "localhost", 5903);
+    doTest("    ::4    ", "localhost", 4);
+    doTest("    [::1]    ", "::1", 5900);
+    doTest("    2001:1234::20:1    ", "2001:1234::20:1", 5900);
+    doTest("    [2001:1234::20:1]    ", "2001:1234::20:1", 5900);
+    doTest("    [2001:1234::20:1]:5905    ", "2001:1234::20:1", 5905);
 
     return 0;
 }

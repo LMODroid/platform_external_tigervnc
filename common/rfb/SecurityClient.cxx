@@ -32,13 +32,18 @@
 #ifdef HAVE_GNUTLS
 #include <rfb/CSecurityTLS.h>
 #endif
+#ifdef HAVE_NETTLE
+#include <rfb/CSecurityRSAAES.h>
+#include <rfb/CSecurityDH.h>
+#include <rfb/CSecurityMSLogonII.h>
+#endif
 
 using namespace rdr;
 using namespace rfb;
 
 UserPasswdGetter *CSecurity::upg = NULL;
-#ifdef HAVE_GNUTLS
-UserMsgBox *CSecurityTLS::msg = NULL;
+#if defined(HAVE_GNUTLS) || defined(HAVE_NETTLE)
+UserMsgBox *CSecurity::msg = NULL;
 #endif
 
 StringParameter SecurityClient::secTypes
@@ -47,19 +52,24 @@ StringParameter SecurityClient::secTypes
 #ifdef HAVE_GNUTLS
  ", TLSNone, TLSVnc, TLSPlain, X509None, X509Vnc, X509Plain"
 #endif
+#ifdef HAVE_NETTLE
+ ", RA2, RA2ne, RA2_256, RA2ne_256, DH, MSLogonII"
+#endif
  ")",
 #ifdef HAVE_GNUTLS
- "X509Plain,TLSPlain,X509Vnc,TLSVnc,X509None,TLSNone,VncAuth,None",
-#else
- "VncAuth,None",
+ "X509Plain,TLSPlain,X509Vnc,TLSVnc,X509None,TLSNone,"
 #endif
+#ifdef HAVE_NETTLE
+ "RA2,RA2_256,RA2ne,RA2ne_256,DH,MSLogonII"
+#endif
+ "VncAuth,None",
 ConfViewer);
 
-CSecurity* SecurityClient::GetCSecurity(CConnection* cc, U32 secType)
+CSecurity* SecurityClient::GetCSecurity(CConnection* cc, uint32_t secType)
 {
   assert (CSecurity::upg != NULL); /* (upg == NULL) means bug in the viewer */
-#ifdef HAVE_GNUTLS
-  assert (CSecurityTLS::msg != NULL);
+#if defined(HAVE_GNUTLS) || defined(HAVE_NETTLE)
+  assert (CSecurity::msg != NULL);
 #endif
 
   if (!IsSupported(secType))
@@ -93,6 +103,20 @@ CSecurity* SecurityClient::GetCSecurity(CConnection* cc, U32 secType)
     return new CSecurityStack(cc, secTypeX509Plain,
                               new CSecurityTLS(cc, false),
                               new CSecurityPlain(cc));
+#endif
+#ifdef HAVE_NETTLE
+  case secTypeRA2:
+    return new CSecurityRSAAES(cc, secTypeRA2, 128, true);
+  case secTypeRA2ne:
+    return new CSecurityRSAAES(cc, secTypeRA2ne, 128, false);
+  case secTypeRA256:
+    return new CSecurityRSAAES(cc, secTypeRA256, 256, true);
+  case secTypeRAne256:
+    return new CSecurityRSAAES(cc, secTypeRAne256, 256, false);
+  case secTypeDH:
+    return new CSecurityDH(cc);
+  case secTypeMSLogonII:
+    return new CSecurityMSLogonII(cc);
 #endif
   }
 

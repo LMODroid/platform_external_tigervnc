@@ -20,6 +20,8 @@
 #include <config.h>
 #endif
 
+#include <windows.h>
+
 #include <rfb_win32/EventManager.h>
 #include <rdr/Exception.h>
 #include <rfb/LogWriter.h>
@@ -95,7 +97,7 @@ BOOL EventManager::getMessage(MSG* msg, HWND hwnd, UINT minMsg, UINT maxMsg) {
     } else
       return GetMessage(msg, hwnd, minMsg, maxMsg);
 
-    if ((result >= WAIT_OBJECT_0) && (result < (WAIT_OBJECT_0 + eventCount))) {
+    if (result < (WAIT_OBJECT_0 + eventCount)) {
       // - An event was set - call the handler
       int index = result - WAIT_OBJECT_0;
       handlers[index]->processEvent(events[index]);

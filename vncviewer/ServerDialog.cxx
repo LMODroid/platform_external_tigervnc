@@ -39,9 +39,9 @@
 #include <rfb/Exception.h>
 #include <rfb/LogWriter.h>
 
+#include "fltk/layout.h"
 #include "ServerDialog.h"
 #include "OptionsDialog.h"
-#include "fltk_layout.h"
 #include "i18n.h"
 #include "vncviewer.h"
 #include "parameters.h"
@@ -55,63 +55,61 @@ static LogWriter vlog("ServerDialog");
 const char* SERVER_HISTORY="tigervnc.history";
 
 ServerDialog::ServerDialog()
-  : Fl_Window(450, 160, _("VNC Viewer: Connection Details"))
+  : Fl_Window(450, 0, _("VNC Viewer: Connection Details"))
 {
-  int x, y;
+  int x, y, x2;
   Fl_Button *button;
   Fl_Box *divider;
 
-  int margin = 20;
-  int server_label_width = gui_str_len(_("VNC server:"));
+  x = OUTER_MARGIN;
+  y = OUTER_MARGIN;
 
-  x = margin + server_label_width;
-  y = margin;
-  
-  serverName = new Fl_Input_Choice(x, y, w() - margin*2 - server_label_width, INPUT_HEIGHT, _("VNC server:"));
-  usedDir = NULL;
+  serverName = new Fl_Input_Choice(LBLLEFT(x, y, w() - OUTER_MARGIN*2,
+                                   INPUT_HEIGHT, _("VNC server:")));
+  y += INPUT_HEIGHT + INNER_MARGIN;
 
-  int adjust = (w() - 20) / 4;
-  int button_width = adjust - margin/2;
+  x2 = x;
 
-  x = margin;
-  y = margin + margin/2 + INPUT_HEIGHT;
-
-  y += margin/2;
-
-  button = new Fl_Button(x, y, button_width, BUTTON_HEIGHT, _("Options..."));
+  button = new Fl_Button(x2, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("Options..."));
   button->callback(this->handleOptions, this);
-  
-  x += adjust;
-  
-  button = new Fl_Button(x, y, button_width, BUTTON_HEIGHT, _("Load..."));
+  x2 += BUTTON_WIDTH + INNER_MARGIN;
+
+  button = new Fl_Button(x2, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("Load..."));
   button->callback(this->handleLoad, this);
+  x2 += BUTTON_WIDTH + INNER_MARGIN;
 
-  x += adjust;
-
-  button = new Fl_Button(x, y, button_width, BUTTON_HEIGHT, _("Save As..."));
+  button = new Fl_Button(x2, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("Save As..."));
   button->callback(this->handleSaveAs, this);
-  
-  x = 0;
-  y += margin/2 + BUTTON_HEIGHT;
+  x2 += BUTTON_WIDTH + INNER_MARGIN;
 
-  divider = new Fl_Box(x, y, w(), 2);
+  y += BUTTON_HEIGHT + INNER_MARGIN;
+
+  divider = new Fl_Box(0, y, w(), 2);
   divider->box(FL_THIN_DOWN_FRAME);
-  
-  x += margin;
-  y += margin/2;
 
-  button = new Fl_Button(x, y, button_width, BUTTON_HEIGHT, _("About..."));
+  y += divider->h() + INNER_MARGIN;
+
+  // Symmetric margin around bottom button bar
+  y += OUTER_MARGIN - INNER_MARGIN;
+
+  button = new Fl_Button(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("About..."));
   button->callback(this->handleAbout, this);
 
-  x = w() - margin - adjust - button_width - 20;
+  x2 = w() - OUTER_MARGIN - BUTTON_WIDTH*2 - INNER_MARGIN*1;
 
-  button = new Fl_Button(x, y, button_width, BUTTON_HEIGHT, _("Cancel"));
+  button = new Fl_Button(x2, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("Cancel"));
   button->callback(this->handleCancel, this);
+  x2 += BUTTON_WIDTH + INNER_MARGIN;
 
-  x += adjust;
-
-  button = new Fl_Return_Button(x, y, button_width+20, BUTTON_HEIGHT, _("Connect"));
+  button = new Fl_Return_Button(x2, y, BUTTON_WIDTH, BUTTON_HEIGHT, _("Connect"));
   button->callback(this->handleConnect, this);
+  x2 += BUTTON_WIDTH + INNER_MARGIN;
+
+  y += BUTTON_HEIGHT + INNER_MARGIN;
+
+  /* Needed for resize to work sanely */
+  resizable(NULL);
+  h(y-INNER_MARGIN+OUTER_MARGIN);
 
   callback(this->handleCancel, this);
 }
@@ -119,8 +117,6 @@ ServerDialog::ServerDialog()
 
 ServerDialog::~ServerDialog()
 {
-  if (usedDir) 
-    free(usedDir);
 }
 
 
@@ -157,20 +153,21 @@ void ServerDialog::run(const char* servername, char *newservername)
   newservername[VNCSERVERNAMELEN - 1] = '\0';
 }
 
-void ServerDialog::handleOptions(Fl_Widget *widget, void *data)
+void ServerDialog::handleOptions(Fl_Widget* /*widget*/, void* /*data*/)
 {
   OptionsDialog::showDialog();
 }
 
 
-void ServerDialog::handleLoad(Fl_Widget *widget, void *data)
+void ServerDialog::handleLoad(Fl_Widget* /*widget*/, void* data)
 {
   ServerDialog *dialog = (ServerDialog*)data;
 
-  if (!dialog->usedDir)
-    getuserhomedir(&(dialog->usedDir));
+  if (dialog->usedDir.empty())
+    dialog->usedDir = os::getuserhomedir();
 
-  Fl_File_Chooser* file_chooser = new Fl_File_Chooser(dialog->usedDir, _("TigerVNC configuration (*.tigervnc)"), 
+  Fl_File_Chooser* file_chooser = new Fl_File_Chooser(dialog->usedDir.c_str(),
+                                                      _("TigerVNC configuration (*.tigervnc)"),
                                                       0, _("Select a TigerVNC configuration file"));
   file_chooser->preview(0);
   file_chooser->previewButton->hide();
@@ -201,15 +198,16 @@ void ServerDialog::handleLoad(Fl_Widget *widget, void *data)
 }
 
 
-void ServerDialog::handleSaveAs(Fl_Widget *widget, void *data)
+void ServerDialog::handleSaveAs(Fl_Widget* /*widget*/, void* data)
 { 
   ServerDialog *dialog = (ServerDialog*)data;
   const char* servername = dialog->serverName->value();
   const char* filename;
-  if (!dialog->usedDir)
-    getuserhomedir(&dialog->usedDir);
+  if (dialog->usedDir.empty())
+    dialog->usedDir = os::getuserhomedir();
   
-  Fl_File_Chooser* file_chooser = new Fl_File_Chooser(dialog->usedDir, _("TigerVNC configuration (*.tigervnc)"), 
+  Fl_File_Chooser* file_chooser = new Fl_File_Chooser(dialog->usedDir.c_str(),
+                                                      _("TigerVNC configuration (*.tigervnc)"),
                                                       2, _("Save the TigerVNC configuration to file"));
   
   file_chooser->preview(0);
@@ -261,13 +259,13 @@ void ServerDialog::handleSaveAs(Fl_Widget *widget, void *data)
 }
 
 
-void ServerDialog::handleAbout(Fl_Widget *widget, void *data)
+void ServerDialog::handleAbout(Fl_Widget* /*widget*/, void* /*data*/)
 {
   about_vncviewer();
 }
 
 
-void ServerDialog::handleCancel(Fl_Widget *widget, void *data)
+void ServerDialog::handleCancel(Fl_Widget* /*widget*/, void* data)
 {
   ServerDialog *dialog = (ServerDialog*)data;
 
@@ -276,7 +274,7 @@ void ServerDialog::handleCancel(Fl_Widget *widget, void *data)
 }
 
 
-void ServerDialog::handleConnect(Fl_Widget *widget, void *data)
+void ServerDialog::handleConnect(Fl_Widget* /*widget*/, void *data)
 {
   ServerDialog *dialog = (ServerDialog*)data;
   const char* servername = dialog->serverName->value();
@@ -315,13 +313,12 @@ void ServerDialog::loadServerHistory()
   return;
 #endif
 
-  char* homeDir = NULL;
-  if (getvnchomedir(&homeDir) == -1)
+  const char* homeDir = os::getvnchomedir();
+  if (homeDir == NULL)
     throw Exception(_("Could not obtain the home directory path"));
 
   char filepath[PATH_MAX];
-  snprintf(filepath, sizeof(filepath), "%s%s", homeDir, SERVER_HISTORY);
-  delete[] homeDir;
+  snprintf(filepath, sizeof(filepath), "%s/%s", homeDir, SERVER_HISTORY);
 
   /* Read server history from file */
   FILE* f = fopen(filepath, "r");
@@ -382,13 +379,12 @@ void ServerDialog::saveServerHistory()
   return;
 #endif
 
-  char* homeDir = NULL;
-  if (getvnchomedir(&homeDir) == -1)
+  const char* homeDir = os::getvnchomedir();
+  if (homeDir == NULL)
     throw Exception(_("Could not obtain the home directory path"));
 
   char filepath[PATH_MAX];
-  snprintf(filepath, sizeof(filepath), "%s%s", homeDir, SERVER_HISTORY);
-  delete[] homeDir;
+  snprintf(filepath, sizeof(filepath), "%s/%s", homeDir, SERVER_HISTORY);
 
   /* Write server history to file */
   FILE* f = fopen(filepath, "w+");
@@ -406,6 +402,6 @@ void ServerDialog::saveServerHistory()
 void ServerDialog::updateUsedDir(const char* filename)
 {
   char * name = strdup(filename);
-  usedDir = strdup(dirname(name));
+  usedDir = dirname(name);
   free(name);
 }

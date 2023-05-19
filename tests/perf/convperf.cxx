@@ -32,17 +32,18 @@
 static const int tile = 64;
 static const int fbsize = 4096;
 
-static rdr::U8 *fb1, *fb2;
+static uint8_t *fb1, *fb2;
 
-typedef void (*testfn) (rfb::PixelFormat&, rfb::PixelFormat&, rdr::U8*, rdr::U8*);
+typedef void (*testfn) (rfb::PixelFormat&, rfb::PixelFormat&, uint8_t*, uint8_t*);
 
 struct TestEntry {
   const char *label;
   testfn fn;
 };
 
-static void testMemcpy(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf,
-                       rdr::U8 *dst, rdr::U8 *src)
+static void testMemcpy(rfb::PixelFormat &dstpf,
+                       rfb::PixelFormat& /*srcpf*/,
+                       uint8_t *dst, uint8_t *src)
 {
   int h;
   h = tile;
@@ -53,20 +54,23 @@ static void testMemcpy(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf,
   }
 }
 
-static void testBuffer(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf,
-                       rdr::U8 *dst, rdr::U8 *src)
+static void testBuffer(rfb::PixelFormat &dstpf,
+                       rfb::PixelFormat &srcpf,
+                       uint8_t *dst, uint8_t *src)
 {
   dstpf.bufferFromBuffer(dst, srcpf, src, tile, tile, fbsize, fbsize);
 }
 
-static void testToRGB(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf,
-                      rdr::U8 *dst, rdr::U8 *src)
+static void testToRGB(rfb::PixelFormat& /*dstpf*/,
+                      rfb::PixelFormat &srcpf,
+                      uint8_t *dst, uint8_t *src)
 {
   srcpf.rgbFromBuffer(dst, src, tile, fbsize, tile);
 }
 
-static void testFromRGB(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf,
-                        rdr::U8 *dst, rdr::U8 *src)
+static void testFromRGB(rfb::PixelFormat &dstpf,
+                        rfb::PixelFormat& /*srcpf*/,
+                        uint8_t *dst, uint8_t *src)
 {
   dstpf.bufferFromRGB(dst, src, tile, fbsize, tile);
 }
@@ -77,7 +81,7 @@ static void doTest(testfn fn, rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf)
 
   for (int i = 0;i < 10000;i++) {
     int x, y;
-    rdr::U8 *dst, *src;
+    uint8_t *dst, *src;
     x = rand() % (fbsize - tile);
     y = rand() % (fbsize - tile);
     dst = fb1 + (x + y * fbsize) * dstpf.bpp/8;
@@ -120,7 +124,7 @@ static void doTests(rfb::PixelFormat &dstpf, rfb::PixelFormat &srcpf)
   printf("\n");
 }
 
-int main(int argc, char **argv)
+int main(int /*argc*/, char** /*argv*/)
 {
   size_t bufsize;
 
@@ -131,8 +135,8 @@ int main(int argc, char **argv)
 
   bufsize = fbsize * fbsize * 4;
 
-  fb1 = new rdr::U8[bufsize];
-  fb2 = new rdr::U8[bufsize];
+  fb1 = new uint8_t[bufsize];
+  fb2 = new uint8_t[bufsize];
 
   for (i = 0;i < bufsize;i++) {
     fb1[i] = rand();

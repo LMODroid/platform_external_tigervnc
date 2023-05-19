@@ -20,7 +20,6 @@
 #include <config.h>
 #endif
 
-#include <tchar.h>
 #include <rfb_win32/MonitorInfo.h>
 #include <rfb_win32/Win32Util.h>
 #include <rdr/Exception.h>
@@ -79,8 +78,8 @@ struct monitorByNameData {
 };
 
 static BOOL CALLBACK monitorByNameEnumProc(HMONITOR monitor,
-                                    HDC dc,
-                                    LPRECT pos,
+                                    HDC /*dc*/,
+                                    LPRECT /*pos*/,
                                     LPARAM d) {
   monitorByNameData* data = (monitorByNameData*)d;
   memset(data->info, 0, sizeof(MONITORINFOEXA));

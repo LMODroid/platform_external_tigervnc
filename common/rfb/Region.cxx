@@ -139,8 +139,12 @@ rfb::Region rfb::Region::subtract(const rfb::Region& r) const {
   return ret;
 }
 
-bool rfb::Region::equals(const rfb::Region& r) const {
+bool rfb::Region::operator==(const rfb::Region& r) const {
   return XEqualRegion(xrgn, r.xrgn);
+}
+
+bool rfb::Region::operator!=(const rfb::Region& r) const {
+  return !XEqualRegion(xrgn, r.xrgn);
 }
 
 int rfb::Region::numRects() const {

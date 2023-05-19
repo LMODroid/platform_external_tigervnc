@@ -30,7 +30,7 @@ class Fl_Round_Button;
 class Fl_Input;
 class Fl_Int_Input;
 class Fl_Choice;
-class MonitorArrangement;
+class Fl_Monitor_Arrangement;
 
 typedef void (OptionsCallback)(void*);
 
@@ -62,6 +62,7 @@ protected:
   static void handleJpeg(Fl_Widget *widget, void *data);
 
   static void handleX509(Fl_Widget *widget, void *data);
+  static void handleRSAAES(Fl_Widget *widget, void *data);
 
   static void handleClipboard(Fl_Widget *widget, void *data);
 
@@ -101,6 +102,7 @@ protected:
   Fl_Check_Button *encNoneCheckbox;
   Fl_Check_Button *encTLSCheckbox;
   Fl_Check_Button *encX509Checkbox;
+  Fl_Check_Button *encRSAAESCheckbox;
   Fl_Input *caInput;
   Fl_Input *crlInput;
 
@@ -133,7 +135,7 @@ protected:
   Fl_Round_Button *currentMonitorButton;
   Fl_Round_Button *allMonitorsButton;
   Fl_Round_Button *selectedMonitorsButton;
-  MonitorArrangement *monitorArrangement;
+  Fl_Monitor_Arrangement *monitorArrangement;
 
   /* Misc. */
   Fl_Check_Button *sharedCheckbox;

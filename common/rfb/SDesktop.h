@@ -41,15 +41,11 @@
 #include <rfb/PixelBuffer.h>
 #include <rfb/VNCServer.h>
 #include <rfb/InputHandler.h>
-#include <rfb/Exception.h>
 #include <rfb/screenTypes.h>
-#include <rfb/util.h>
 
 namespace network { class Socket; }
 
 namespace rfb {
-
-  class VNCServer;
 
   class SDesktop : public InputHandler {
   public:
@@ -84,9 +80,9 @@ namespace rfb {
 
     // setScreenLayout() requests to reconfigure the framebuffer and/or
     // the layout of screens.
-    virtual unsigned int setScreenLayout(int __unused_attr fb_width,
-                                         int __unused_attr fb_height,
-                                         const ScreenSet& __unused_attr layout) {
+    virtual unsigned int setScreenLayout(int /*fb_width*/,
+                                         int /*fb_height*/,
+                                         const ScreenSet& /*layout*/) {
       return resultProhibited;
     }
 
@@ -104,14 +100,14 @@ namespace rfb {
     // handleClipboardAnnounce() is called to indicate a change in the
     // clipboard on a client. Call VNCServer::requestClipboard() to
     // access the actual data.
-    virtual void handleClipboardAnnounce(bool __unused_attr available) {}
+    virtual void handleClipboardAnnounce(bool /*available*/) {}
 
     // handleClipboardData() is called when a client has sent over
     // the clipboard data as a result of a previous call to
     // VNCServer::requestClipboard(). Note that this function might
     // never be called if the clipboard data was no longer available
     // when the client received the request.
-    virtual void handleClipboardData(const char* __unused_attr data) {}
+    virtual void handleClipboardData(const char* /*data*/) {}
 
   protected:
     virtual ~SDesktop() {}
@@ -125,13 +121,13 @@ namespace rfb {
   public:
     SStaticDesktop(const Point& size) : server(0), buffer(0) {
       PixelFormat pf;
-      const rdr::U8 black[4] = { 0, 0, 0, 0 };
+      const uint8_t black[4] = { 0, 0, 0, 0 };
       buffer = new ManagedPixelBuffer(pf, size.x, size.y);
       if (buffer)
         buffer->fillRect(buffer->getRect(), black);
     }
     SStaticDesktop(const Point& size, const PixelFormat& pf) : buffer(0) {
-      const rdr::U8 black[4] = { 0, 0, 0, 0 };
+      const uint8_t black[4] = { 0, 0, 0, 0 };
       buffer = new ManagedPixelBuffer(pf, size.x, size.y);
       if (buffer)
         buffer->fillRect(buffer->getRect(), black);
@@ -149,7 +145,7 @@ namespace rfb {
       server = 0;
     }
     virtual void queryConnection(network::Socket* sock,
-                                 __unused_attr const char* userName) {
+                                 const char* /*userName*/) {
       server->approveConnection(sock, true, NULL);
     }
 

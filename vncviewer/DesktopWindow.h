@@ -25,7 +25,6 @@
 #include <sys/time.h>
 
 #include <rfb/Rect.h>
-#include <rfb/Pixel.h>
 
 #include <FL/Fl_Window.H>
 
@@ -36,12 +35,6 @@ class Surface;
 class Viewport;
 
 class Fl_Scrollbar;
-
-#ifdef __GNUC__
-#  define __printf_attr(a, b) __attribute__((__format__ (__printf__, a, b)))
-#else
-#  define __printf_attr(a, b)
-#endif // __GNUC__
 
 class DesktopWindow : public Fl_Window {
 public:
@@ -64,7 +57,7 @@ public:
 
   // New image for the locally rendered cursor
   void setCursor(int width, int height, const rfb::Point& hotspot,
-                 const rdr::U8* data);
+                 const uint8_t* data);
 
   // Server-provided cursor position
   void setCursorPos(const rfb::Point& pos);
@@ -89,7 +82,8 @@ public:
 private:
   static void menuOverlay(void *data);
 
-  void setOverlay(const char *text, ...) __printf_attr(2, 3);
+  void setOverlay(const char *text, ...)
+    __attribute__((__format__ (__printf__, 2, 3)));
   static void updateOverlay(void *data);
 
   static int fltkDispatch(int event, Fl_Window *win);

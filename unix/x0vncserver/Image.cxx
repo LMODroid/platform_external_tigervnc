@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 
 #include <sys/ipc.h>
@@ -208,7 +209,8 @@ void Image::updateRect(Image *src, int dst_x, int dst_y,
 
 static bool caughtShmError = false;
 
-static int ShmCreationXErrorHandler(Display *dpy, XErrorEvent *error)
+static int ShmCreationXErrorHandler(Display* /*dpy*/,
+                                    XErrorEvent* /*error*/)
 {
   caughtShmError = true;
   return 0;

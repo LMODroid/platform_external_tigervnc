@@ -78,7 +78,7 @@ StringParameter interface("interface",
 
 static const char* defaultDesktopName()
 {
-  size_t host_max = sysconf(_SC_HOST_NAME_MAX);
+  long host_max = sysconf(_SC_HOST_NAME_MAX);
   if (host_max < 0)
     return "";
 
@@ -90,7 +90,7 @@ static const char* defaultDesktopName()
   if (pwent == NULL)
     return "";
 
-  size_t len = snprintf(NULL, 0, "%s@%s", pwent->pw_name, hostname.data());
+  int len = snprintf(NULL, 0, "%s@%s", pwent->pw_name, hostname.data());
   if (len < 0)
     return "";
 
@@ -108,7 +108,7 @@ static const char* defaultDesktopName()
 
 static bool caughtSignal = false;
 
-static void CleanupSignalHandler(int sig)
+static void CleanupSignalHandler(int /*sig*/)
 {
   caughtSignal = true;
 }
@@ -275,11 +275,10 @@ int main(int argc, char** argv)
     usage();
   }
 
-  CharArray dpyStr(displayname.getData());
-  if (!(dpy = XOpenDisplay(dpyStr.buf[0] ? dpyStr.buf : 0))) {
+  if (!(dpy = XOpenDisplay(displayname))) {
     // FIXME: Why not vlog.error(...)?
     fprintf(stderr,"%s: unable to open display \"%s\"\r\n",
-            programName, XDisplayName(dpyStr.buf));
+            programName, XDisplayName(displayname));
     exit(1);
   }
 
@@ -319,14 +318,12 @@ int main(int argc, char** argv)
                 (int)rfbport);
     }
 
-    const char *hostsData = hostsFile.getData();
-    FileTcpFilter fileTcpFilter(hostsData);
-    if (strlen(hostsData) != 0)
+    FileTcpFilter fileTcpFilter(hostsFile);
+    if (strlen(hostsFile) != 0)
       for (std::list<SocketListener*>::iterator i = listeners.begin();
            i != listeners.end();
            i++)
         (*i)->setFilter(&fileTcpFilter);
-    delete[] hostsData;
 
     PollingScheduler sched((int)pollingCycle, (int)maxProcessorUsage);
 

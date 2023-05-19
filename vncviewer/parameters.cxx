@@ -28,7 +28,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <tchar.h>
 #endif
 
 #include "parameters.h"
@@ -630,12 +629,11 @@ void saveViewerParameters(const char *filename, const char *servername) {
     return;
 #endif
     
-    char* homeDir = NULL;
-    if (getvnchomedir(&homeDir) == -1)
+    const char* homeDir = os::getvnchomedir();
+    if (homeDir == NULL)
       throw Exception(_("Could not obtain the home directory path"));
 
-    snprintf(filepath, sizeof(filepath), "%sdefault.tigervnc", homeDir);
-    delete[] homeDir;
+    snprintf(filepath, sizeof(filepath), "%s/default.tigervnc", homeDir);
   } else {
     snprintf(filepath, sizeof(filepath), "%s", filename);
   }
@@ -682,7 +680,7 @@ void saveViewerParameters(const char *filename, const char *servername) {
 
 static bool findAndSetViewerParameterFromValue(
   VoidParameter* parameters[], size_t parameters_len,
-  char* value, char* line, char* filepath)
+  char* value, char* line)
 {
   const size_t buffersize = 256;
   char decodingBuffer[buffersize];
@@ -735,12 +733,11 @@ char* loadViewerParameters(const char *filename) {
     return loadFromReg();
 #endif
 
-    char* homeDir = NULL;
-    if (getvnchomedir(&homeDir) == -1)
+    const char* homeDir = os::getvnchomedir();
+    if (homeDir == NULL)
       throw Exception(_("Could not obtain the home directory path"));
 
-    snprintf(filepath, sizeof(filepath), "%sdefault.tigervnc", homeDir);
-    delete[] homeDir;
+    snprintf(filepath, sizeof(filepath), "%s/default.tigervnc", homeDir);
   } else {
     snprintf(filepath, sizeof(filepath), "%s", filename);
   }
@@ -821,11 +818,11 @@ char* loadViewerParameters(const char *filename) {
 
       } else {
         invalidParameterName = findAndSetViewerParameterFromValue(parameterArray, sizeof(parameterArray),
-                                                                  value, line, filepath);
+                                                                  value, line);
 
         if (invalidParameterName) {
           invalidParameterName = findAndSetViewerParameterFromValue(readOnlyParameterArray, sizeof(readOnlyParameterArray),
-                                                                    value, line, filepath);
+                                                                    value, line);
         }
       }
     } catch(Exception& e) {

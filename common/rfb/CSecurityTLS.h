@@ -34,7 +34,6 @@
 #include <gnutls/gnutls.h>
 
 namespace rfb {
-  class UserMsgBox;
   class CSecurityTLS : public CSecurity {
   public:
     CSecurityTLS(CConnection* cc, bool _anon);
@@ -45,7 +44,6 @@ namespace rfb {
 
     static StringParameter X509CA;
     static StringParameter X509CRL;
-    static UserMsgBox *msg;
 
   protected:
     void shutdown();
@@ -59,8 +57,6 @@ namespace rfb {
     gnutls_anon_client_credentials_t anon_cred;
     gnutls_certificate_credentials_t cert_cred;
     bool anon;
-
-    char *cafile, *crlfile;
 
     rdr::InStream* tlsis;
     rdr::OutStream* tlsos;

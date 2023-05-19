@@ -44,15 +44,16 @@ cat ${DEBDIR}/debian/changelog >> ${CURDIR}/build/debian/changelog
 ## Start the build
 
 docker run --volume ${CURDIR}/build:/home/deb/build --interactive --rm tigervnc/${DOCKER} \
-	bash -c "
-	tar -C ~/build -axf ~/build/tigervnc_${VERSION}.orig.tar.xz &&
-	cp -a ~/build/debian ~/build/tigervnc-${VERSION}/debian &&
-	mk-build-deps ~/build/tigervnc-${VERSION}/debian/control &&
-	sudo dpkg --unpack ~/tigervnc-build-deps_*.deb &&
-	sudo apt-get update &&
-	sudo apt-get -f install -y &&
+	bash -e -x -c "
+	tar -C ~/build -axf ~/build/tigervnc_${VERSION}.orig.tar.xz
+	cp -a ~/build/debian ~/build/tigervnc-${VERSION}/debian
+	sudo apt-get update
+	mk-build-deps ~/build/tigervnc-${VERSION}/debian/control
+	sudo DEBIAN_FRONTEND=noninteractive \
+	    apt-get install -y ~/tigervnc-build-deps_*.deb
 	cd ~/build/tigervnc-${VERSION} && dpkg-buildpackage
 	"
 
 mkdir -p ${CURDIR}/result
 cp -av ${CURDIR}/build/*.deb ${CURDIR}/result
+cp -av ${CURDIR}/build/*.ddeb ${CURDIR}/result

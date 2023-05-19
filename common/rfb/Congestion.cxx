@@ -38,6 +38,7 @@
 #endif
 
 #include <assert.h>
+#include <string.h>
 #include <sys/time.h>
 
 #ifdef __linux__
@@ -313,6 +314,8 @@ size_t Congestion::getBandwidth()
 
 void Congestion::debugTrace(const char* filename, int fd)
 {
+  (void)filename;
+  (void)fd;
 #ifdef CONGESTION_TRACE
 #ifdef __linux__
   FILE *f;

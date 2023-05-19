@@ -61,13 +61,13 @@ PlatformPixelBuffer::PlatformPixelBuffer(int width, int height) :
     vlog.debug("Using standard XImage");
   }
 
-  setBuffer(width, height, (rdr::U8*)xim->data,
+  setBuffer(width, height, (uint8_t*)xim->data,
             xim->bytes_per_line / (getPF().bpp/8));
 
   // On X11, the Pixmap backing this Surface is uninitialized.
   clear(0, 0, 0);
 #else
-  setBuffer(width, height, (rdr::U8*)Surface::data, width);
+  setBuffer(width, height, (uint8_t*)Surface::data, width);
 #endif
 }
 
@@ -135,7 +135,8 @@ rfb::Rect PlatformPixelBuffer::getDamage(void)
 
 static bool caughtError;
 
-static int XShmAttachErrorHandler(Display *dpy, XErrorEvent *error)
+static int XShmAttachErrorHandler(Display* /*dpy*/,
+                                  XErrorEvent* /*error*/)
 {
   caughtError = true;
   return 0;

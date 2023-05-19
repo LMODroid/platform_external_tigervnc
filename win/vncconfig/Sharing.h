@@ -36,16 +36,16 @@ namespace rfb {
         setItemChecked(IDC_SHARE_ALWAYS, rfb::Server::alwaysShared);
         setItemChecked(IDC_SHARE_CLIENT, !(rfb::Server::neverShared || rfb::Server::alwaysShared));
       }
-      bool onCommand(int id, int cmd) {
+      bool onCommand(int /*id*/, int /*cmd*/) {
         setChanged((isItemChecked(IDC_DISCONNECT_CLIENTS) != rfb::Server::disconnectClients) ||
           (isItemChecked(IDC_SHARE_NEVER) != rfb::Server::neverShared) ||
           (isItemChecked(IDC_SHARE_ALWAYS) != rfb::Server::alwaysShared));
         return true;
       }
       bool onOk() {
-        regKey.setBool(_T("DisconnectClients"), isItemChecked(IDC_DISCONNECT_CLIENTS));
-        regKey.setBool(_T("AlwaysShared"), isItemChecked(IDC_SHARE_ALWAYS));
-        regKey.setBool(_T("NeverShared"), isItemChecked(IDC_SHARE_NEVER));
+        regKey.setBool("DisconnectClients", isItemChecked(IDC_DISCONNECT_CLIENTS));
+        regKey.setBool("AlwaysShared", isItemChecked(IDC_SHARE_ALWAYS));
+        regKey.setBool("NeverShared", isItemChecked(IDC_SHARE_NEVER));
        return true;
       }
     protected:

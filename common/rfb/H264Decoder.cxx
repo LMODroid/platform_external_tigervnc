@@ -65,10 +65,12 @@ H264DecoderContext* H264Decoder::findContext(const Rect& r)
   return NULL;
 }
 
-bool H264Decoder::readRect(const Rect& r, rdr::InStream* is,
-                           const ServerParams& server, rdr::OutStream* os)
+bool H264Decoder::readRect(const Rect& /*r*/,
+                           rdr::InStream* is,
+                           const ServerParams& /*server*/,
+                           rdr::OutStream* os)
 {
-  rdr::U32 len;
+  uint32_t len;
 
   if (!is->hasData(8))
     return false;
@@ -77,7 +79,7 @@ bool H264Decoder::readRect(const Rect& r, rdr::InStream* is,
 
   len = is->readU32();
   os->writeU32(len);
-  rdr::U32 flags = is->readU32();
+  uint32_t flags = is->readU32();
 
   os->writeU32(flags);
 
@@ -92,12 +94,13 @@ bool H264Decoder::readRect(const Rect& r, rdr::InStream* is,
 }
 
 void H264Decoder::decodeRect(const Rect& r, const void* buffer,
-                             size_t buflen, const ServerParams& server,
+                             size_t buflen,
+                             const ServerParams& /*server*/,
                              ModifiablePixelBuffer* pb)
 {
   rdr::MemInStream is(buffer, buflen);
-  rdr::U32 len = is.readU32();
-  rdr::U32 flags = is.readU32();
+  uint32_t len = is.readU32();
+  uint32_t flags = is.readU32();
 
   H264DecoderContext* ctx = NULL;
   if (flags & resetAllContexts)
@@ -134,5 +137,5 @@ void H264Decoder::decodeRect(const Rect& r, const void* buffer,
   if (!len)
     return;
 
-  ctx->decode(is.getptr(len), len, flags, pb);
+  ctx->decode(is.getptr(len), len, pb);
 }

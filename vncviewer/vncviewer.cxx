@@ -60,13 +60,13 @@
 #include <network/TcpSocket.h>
 #include <os/os.h>
 
-#include <FL/Fl.H>
-#include <FL/Fl_Widget.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Sys_Menu_Bar.H>
 #include <FL/fl_ask.H>
 #include <FL/x.H>
 
+#include "fltk/theme.h"
+#include "fltk/util.h"
 #include "i18n.h"
 #include "parameters.h"
 #include "CConn.h"
@@ -74,7 +74,6 @@
 #include "UserDialog.h"
 #include "touch.h"
 #include "vncviewer.h"
-#include "fltk_layout.h"
 
 #ifdef WIN32
 #include "resource.h"
@@ -185,7 +184,7 @@ static void mainloop(const char* vncserver, network::Socket* sock)
 
     exitMainloop = false;
 
-    cc = new CConn(vncServerName, sock);
+    cc = new CConn(vncserver, sock);
 
     while (!exitMainloop) {
       int next_timer;
@@ -233,12 +232,12 @@ static void mainloop(const char* vncserver, network::Socket* sock)
 }
 
 #ifdef __APPLE__
-static void about_callback(Fl_Widget *widget, void *data)
+static void about_callback(Fl_Widget* /*widget*/, void* /*data*/)
 {
   about_vncviewer();
 }
 
-static void new_connection_cb(Fl_Widget *widget, void *data)
+static void new_connection_cb(Fl_Widget* /*widget*/, void* /*data*/)
 {
   const char *argv[2];
   pid_t pid;
@@ -323,18 +322,8 @@ static const char* getlocaledir()
 }
 static void init_fltk()
 {
-  // Basic text size (10pt @ 96 dpi => 13px)
-  FL_NORMAL_SIZE = 13;
-
-  // Select a FLTK scheme and background color that looks somewhat
-  // close to modern systems
-  Fl::scheme("gtk+");
-  Fl::background(220, 220, 220);
-
-  // macOS has a slightly brighter default background though
-#ifdef __APPLE__
-  Fl::background(240, 240, 240);
-#endif
+  // Adjust look of FLTK
+  init_theme();
 
   // Proper Gnome Shell integration requires that we set a sensible
   // WM_CLASS for the window.
@@ -395,20 +384,11 @@ static void init_fltk()
       delete icons[i];
 #endif
 
-  // This makes the "icon" in dialogs rounded, which fits better
-  // with the above schemes.
-  fl_message_icon()->box(FL_UP_BOX);
-
   // Turn off the annoying behaviour where popups track the mouse.
   fl_message_hotspot(false);
 
   // Avoid empty titles for popups
   fl_message_title_default(_("TigerVNC Viewer"));
-
-#ifdef WIN32
-  // Most "normal" Windows apps use this font for UI elements.
-  Fl::set_font(FL_HELVETICA, "Tahoma");
-#endif
 
   // FLTK exposes these so that we can translate them.
   fl_no     = _("No");
@@ -453,15 +433,13 @@ static void init_fltk()
 static void mkvnchomedir()
 {
   // Create .vnc in the user's home directory if it doesn't already exist
-  char* homeDir = NULL;
-
-  if (getvnchomedir(&homeDir) == -1) {
+  const char* homeDir = os::getvnchomedir();
+  if (homeDir == NULL) {
     vlog.error(_("Could not obtain the home directory path"));
   } else {
     int result = mkdir(homeDir, 0755);
     if (result == -1 && errno != EEXIST)
       vlog.error(_("Could not create VNC home directory: %s"), strerror(errno));
-    delete [] homeDir;
   }
 }
 
@@ -754,15 +732,15 @@ int main(int argc, char** argv)
   mkvnchomedir();
 
   CSecurity::upg = &dlg;
-#ifdef HAVE_GNUTLS
-  CSecurityTLS::msg = &dlg;
+#if defined(HAVE_GNUTLS) || defined(HAVE_NETTLE)
+  CSecurity::msg = &dlg;
 #endif
 
   Socket *sock = NULL;
 
 #ifndef WIN32
   /* Specifying -via and -listen together is nonsense */
-  if (listenMode && strlen(via.getValueStr()) > 0) {
+  if (listenMode && strlen(via) > 0) {
     // TRANSLATORS: "Parameters" are command line arguments, or settings
     // from a file or the Windows registry.
     vlog.error(_("Parameters -listen and -via are incompatible"));
@@ -829,7 +807,7 @@ int main(int argc, char** argv)
     }
 
 #ifndef WIN32
-    if (strlen (via.getValueStr()) > 0 && mktunnel() != 0)
+    if (strlen(via) > 0 && mktunnel() != 0)
       usage(argv[0]);
 #endif
   }

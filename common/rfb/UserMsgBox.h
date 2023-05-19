@@ -35,6 +35,7 @@ namespace rfb {
     };
     /* TODO Implement as function with variable arguments */
     virtual bool showMsgBox(int flags,const char* title, const char* text)=0;
+    virtual ~UserMsgBox() {}
   };
 }
 

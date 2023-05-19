@@ -164,9 +164,9 @@ int main(int argc, char** argv)
       return encrypt_pipe();
     } else if (strncmp(argv[i], "-g", 2) == 0) {
       if (argc == 4) {
-        return encrypt_pipe_for_password(argv[i + 1], strDup(argv[i + 2]));
+        return encrypt_pipe_for_password(argv[i + 1], strdup(argv[i + 2]));
       } else {
-          usage();
+        usage();
       }
     } else if (argv[i][0] == '-') {
       usage();

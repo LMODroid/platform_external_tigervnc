@@ -111,7 +111,7 @@ jobs:
     strategy:
       matrix:
         target:
-          - centos8
+          - centos7
           - rocky8
           - rocky9
           - bionic
